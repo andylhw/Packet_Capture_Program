@@ -83,6 +83,7 @@ void buffer_flush();        //입력 버퍼 지우기
 
 bool captureStart = false;                                                   //캡쳐 스레드 시작flag 변수
 int total = 0, filter = 0, drop = 0;                                         //캡쳐한 패킷 갯수
+int arpMode = 0, dnsMode = 0, httpMode = 0, httpsMode = 0, dhcpMode = 0;     //각각의 Mode값에 따라서, 캡쳐하는게 달라질꺼임.
 char protocolOption[128], portOption[128], ipOption[128], printOption[128];  // filter option 변수
 
 int main() {
@@ -127,10 +128,6 @@ void Capture_helper(FILE *captureData, unsigned char *buffer, int size) {
     
     total++;                                                       // recv한 모든 패킷 수 증가
 	
-    /*
-    printf("Proto: %d", *Ptr);
-    printf("next: %d", *(Ptr+1));
-    */
     /*IPv4의 모든 프로토콜 (ETH_P_IP == 0800)*/
     char *Ptr = &etherHeader->h_proto;
     //ARP DETECTION. ARP == 0806 
@@ -298,7 +295,8 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
 
     // filter ip 검사
     if (!strcmp(ipOption, "*") || !strcmp(inet_ntoa(source.sin_addr), ipOption) ||
-        !strcmp(inet_ntoa(dest.sin_addr), ipOption)) {  // filter port번호 검사
+        !strcmp(inet_ntoa(dest.sin_addr), ipOption)) {  
+        // filter port번호 검사
         if (!strcmp(portOption, "*") || (atoi(portOption) == (int)ntohs(tcpHeader->source)) ||
             (atoi(portOption) == (int)ntohs(tcpHeader->dest))) {
             /*현재 시간 get*/
@@ -350,13 +348,18 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
                 Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof tcpHeader, X,
                                     (Size - sizeof tcpHeader - (ipHeader->ihl * 4) - ETH_HLEN));  // payload
             }
+            //http 출력.
+            if(ntohs(tcpHeader->source) == http || ntohs(tcpHeader->dest) == http){
+            	printf("\nHTTP DETECTED\n");
+            	http_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
+            }
             /*file 출력*/
             Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
+            
         }
     }
 }
-void Tcp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader,
-                       struct tcphdr *tcpHeader, struct sockaddr_in source, struct sockaddr_in dest, int Size) {
+void Tcp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader, struct tcphdr *tcpHeader, struct sockaddr_in source, struct sockaddr_in dest, int Size) {
     fprintf(captureData, "\n############################## TCP Packet #####################################\n");
     Ethrenet_header_fprint(captureData, etherHeader);       // ethernet 정보 fprint
     Ip_header_fprint(captureData, ipHeader, source, dest);  // ip 정보 fprint
@@ -386,11 +389,97 @@ void Tcp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *
     fprintf(captureData, "           --------------------------------------------------------\n");
 
     /* 패킷 정보(payload) Hex dump 와 ASCII 변환 데이터 파일에 출력 */
-    Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + tcpHeader->doff * 4, F,
-                        (Size - tcpHeader->doff * 4 - (ipHeader->ihl * 4) - ETH_HLEN));
+    Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + tcpHeader->doff * 4, F, (Size - tcpHeader->doff * 4 - (ipHeader->ihl * 4) - ETH_HLEN));
     fprintf(captureData, "\n===============================================================================\n");
 }
+#define RESPONSE_SIZE 32768
 
+void http_header_capture(FILE *captureData, unsigned char *response, int Size){
+    /*http 위치찾기.
+    for(int i=0;i<30;i++){
+    	printf("%02x ", *(response+i));
+    }
+    */
+    int getMode = 0;
+    //if GET -> Response가 필요없음.
+    if(*response==0x47 && *(response+1)==0x45 && *(response+2) == 0x54){
+            	getMode = 1;
+    }	
+    char *p = response, *q = 0;
+    char *end = response + RESPONSE_SIZE;
+    char *body = 0;
+    enum {length, chunked, connection};
+    int encoding = 0;
+    int remaining = 0;
+    while(1){
+    	    
+            if (!body && (body = strstr(response, "\r\n\r\n"))) {
+            
+                *body = 0;
+                body += 4;
+		
+                printf("\nReceived Headers:\n%s\n", response);
+		
+                q = strstr(response, "\nContent-Length: ");
+                if (q) {
+                    encoding = length;
+                    q = strchr(q, ' ');
+                    q += 1;
+                    remaining = strtol(q, 0, 10);
+
+                } else {
+                    q = strstr(response, "\nTransfer-Encoding: chunked");
+                    if (q) {
+                        encoding = chunked;
+                        remaining = 0;
+                    } else {
+                        encoding = connection;
+                    }
+                }
+                if(getMode != 1){
+                printf("\nReceived Body:\n");
+                }
+            }else{
+            //if not GET -> Get은 요청이니까 제외
+	    		if(getMode != 1){
+            			printf("%s", body);
+            		}
+            		break;
+            }
+            
+            	if (body) {
+	                if (encoding == length) {
+	                    if (p - body >= remaining) {
+	                        printf("%.*s", remaining, body);
+                        	break;
+	                    }
+                	} else if (encoding == chunked) {
+	                    do {
+	                        if (remaining == 0) {
+	                            if ((q = strstr(body, "\r\n"))) {
+	                                remaining = strtol(body, 0, 16);
+	                                if (!remaining) goto finish;
+	                                body = q + 2;
+	                            } else {
+	                                break;
+	                            }
+	                        }
+                        	if (remaining && p - body >= remaining) {
+	                            printf("%.*s", remaining, body);
+	                            body += remaining + 2;
+	                            remaining = 0;
+	                        }
+	                    } while (!remaining);
+	                }
+	            } //if (body)
+	            else{
+	            	break;
+	      }
+          
+    }
+    finish:
+    	printf("\n");
+}
 void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct iphdr *ipHeader, unsigned char *Buffer, int Size) {
     struct udphdr *udpHeader = (struct udphdr *)(Buffer + ipHeader->ihl * 4 + ETH_HLEN);  //버퍼에서 udp 헤더 정보 get
     struct sockaddr_in source, dest;                                                      //출발, 목적지 주소 정보 저장할 변수
@@ -473,7 +562,6 @@ void Udp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *
     /* 패킷 정보(payload) Hex dump 와 ASCII 변환 데이터 출력 */
     Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, F,
                         (Size - sizeof udpHeader - (ipHeader->ihl * 4) - ETH_HLEN));
-    fprintf(captureData, "\n===============================================================================\n");
 }
 void Dns_header_fprint(FILE *captureData, unsigned char* Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader, struct tcphdr *tcpHeader, struct sockaddr_in source, struct sockaddr_in dest, int size){
 	
