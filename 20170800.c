@@ -502,16 +502,43 @@ void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Siz
 	printf("\n");
 	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23)
 	if(httpsHeader[idx]==20){
-		printf("Content Type: ChangeCipherSpec(20)\n");
-		
+		https_ccs_capture(captureData, httpsHeader, idx);
+		return;
 	}
 	if(httpsHeader[idx]==22){
 		printf("HANDSHAKE DETECTED\n");
 		https_handshake_capture(captureData, httpsHeader, idx);
+		return;
 	}
 	if(httpsHeader[idx]==23){
 		printf("Content Type: Application Data\n");
+		return;
 	}
+}
+void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){	
+	fprintf(stdout, "Content Type: ChangeCipherSpec(20)\n");
+	idx+=2;
+	if(httpsHeader[idx]==1){
+		fprintf(stdout, "Version: TLS 1.0\n");
+	}
+	if(httpsHeader[idx]==2){
+		fprintf(stdout, "Version: TLS 1.1\n");
+	}
+	if(httpsHeader[idx]==3){
+		fprintf(stdout, "Version: TLS 1.2\n");
+	}
+	int length = httpsHeader[idx]*16*16;
+	//printf("first length: %d", length);
+	idx++;
+	length+=httpsHeader[idx];
+	fprintf(stdout, "Length: %d\n", length);
+	idx++;
+	fprintf(stdout, "Change Cipher Spec Message\n");
+	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		https_header_capture(captureData, httpsHeader+idx, idx);
+		return;
+	}
+	
 }
 void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	//Server(1) Client(0)
@@ -529,7 +556,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	}
 	idx++;
 	int length = httpsHeader[idx]*16*16;
-	printf("first length: %d", length);
+	//printf("first length: %d", length);
 	idx++;
 	
 	length+=httpsHeader[idx];
