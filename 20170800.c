@@ -32,7 +32,7 @@
 
 typedef enum { false, true } bool;  // bool 자료형 선언
 
-enum port { dns = 53, http = 80 };  //캡쳐할 port번호
+enum port { dns = 53, http = 80, https = 443 };  //캡쳐할 port번호
 
 enum CaptureOptions {
     A = 1,  // ascii
@@ -310,7 +310,15 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             } else if (ntohs(tcpHeader->dest) == http) {
                 fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
                 fprintf(stdout, "%s:http = TCP Flags [", inet_ntoa(dest.sin_addr));
-            } else {
+            } else if (ntohs(tcpHeader->source) == https){
+            	fprintf(stdout, "%d %s:%u:https > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "%s: = TCP Flags [", inet_ntoa(dest.sin_addr));
+            } else if (ntohs(tcpHeader->dest) == https){
+            	fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "%s:https = TCP Flags [", inet_ntoa(dest.sin_addr));
+            }
+            
+           	else {
                 fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
                 fprintf(stdout, "%s:%u = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
             }
@@ -352,6 +360,11 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             if(ntohs(tcpHeader->source) == http || ntohs(tcpHeader->dest) == http){
             	printf("\nHTTP DETECTED\n");
             	http_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
+            }
+            //https 출력
+            if(ntohs(tcpHeader->source) == https || ntohs(tcpHeader->dest) == https){
+            	printf("\nHTTPS DETECTED\n");
+            	https_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
             }
             /*file 출력*/
             Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
@@ -479,6 +492,135 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
     }
     finish:
     	printf("\n");
+}
+
+void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size){
+	int idx = 0;
+	for(int i=0;i<10;i++){
+		printf("%02X ", httpsHeader[i]);	
+	}
+	printf("\n");
+	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23)
+	if(httpsHeader[idx]==20){
+		printf("Content Type: ChangeCipherSpec(20)\n");
+		
+	}
+	if(httpsHeader[idx]==22){
+		printf("HANDSHAKE DETECTED\n");
+		https_handshake_capture(captureData, httpsHeader, idx);
+	}
+	if(httpsHeader[idx]==23){
+		printf("Content Type: Application Data\n");
+	}
+}
+void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
+	//Server(1) Client(0)
+	int server = 0;
+	printf("Content Type: Handshake(22)\n");
+	idx+=2;
+	if(httpsHeader[idx]==1){
+		fprintf(stdout, "Version: TLS 1.0\n");
+	}
+	if(httpsHeader[idx]==2){
+		fprintf(stdout, "Version: TLS 1.1\n");
+	}
+	if(httpsHeader[idx]==3){
+		fprintf(stdout, "Version: TLS 1.2\n");
+	}
+	idx++;
+	int length = httpsHeader[idx]*16*16;
+	printf("first length: %d", length);
+	idx++;
+	
+	length+=httpsHeader[idx];
+	fprintf(stdout, "Length: %d\n", length);
+	idx++;
+	printf("Test value: %d\n", httpsHeader[idx]);
+	if(httpsHeader[idx]==1){
+		fprintf(stdout, "\nHandshake Protocol: Client Hello\n");
+		fprintf(stdout, "Handshake Type: Client Hello\n");
+	}
+	if(httpsHeader[idx]==2){
+		server=1;
+		fprintf(stdout, "Handshake Protocol: Server Hello\n");
+		fprintf(stdout, "Handshake Type: Server Hello\n");
+	}
+	if(httpsHeader[idx]==4){
+		fprintf(stdout, "Handshake Protocol: Finished\n");
+	}
+	idx++;
+	int hSLength = httpsHeader[idx]*16*16*16*16;
+	int extLength;
+	idx++;
+	hSLength += httpsHeader[idx]*16*16;
+	idx++;
+	hSLength += httpsHeader[idx];
+	fprintf(stdout, "Handshake Length: %d\n", hSLength);
+	idx+=2;
+	if(httpsHeader[idx]==1){
+		fprintf(stdout, "Version: TLS 1.0\n");
+	}
+	if(httpsHeader[idx]==2){
+		fprintf(stdout, "Version: TLS 1.1\n");		
+	}
+	if(httpsHeader[idx]==3){
+		fprintf(stdout, "Version: TLS 1.2\n");
+	}
+	idx++;
+	fprintf(stdout, "Random value: ");
+	for(int i=0;i<32;i++){
+		fprintf(stdout, "%02x", httpsHeader[idx+i]);
+	}
+	fprintf(stdout, "\n");
+	idx+=32;
+	fprintf(stdout, "Session Length: %d\n", httpsHeader[idx]);
+	idx++;
+	fprintf(stdout, "Session ID: ");
+	for(int i=0;i<32;i++){
+		fprintf(stdout, "%02x", httpsHeader[idx+i]);
+	}
+	fprintf(stdout, "\n");
+	idx+=32;
+	if(server == 1){
+		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x01){
+			fprintf(stdout, "Cipher Suite: TLS_AES_128_GCM_SHA256\n");
+		}
+		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x02){
+			fprintf(stdout, "Cipher Suite: TLS_AES_256_GCM_SHA384\n");
+		}
+		idx+=2;
+		if(httpsHeader[idx] != 0){
+			printf("Compression Method: %d\n", httpsHeader[idx]);
+		}
+		if(httpsHeader[idx] == 0){
+			printf("Compression Method: (null)\n");
+		}
+		idx++;
+		extLength = httpsHeader[idx]*16*16;
+		idx++;
+		extLength+=httpsHeader[idx];
+		fprintf(stdout, "Extensions Length: %d\n", extLength);
+		idx+=6;
+		if(httpsHeader[idx]==4){
+			fprintf(stdout,"Extension: supported version\n");
+			fprintf(stdout,"Type: supported version (43)\n");
+			fprintf(stdout,"Length: 2\n");
+			fprintf(stdout,"Supported Version: TLS 1.3\n");
+		}
+		idx+=2;
+		if(httpsHeader[idx]==51){
+			fprintf(stdout,"Type: Key share\n");
+		}
+		idx++;
+		int klen=httpsHeader[idx]*16*16;
+		idx++;
+		klen+=httpsHeader[idx];
+		fprintf(stdout, "Length: %d", klen);
+		
+	}
+	if(server == 0){
+	
+	}
 }
 void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct iphdr *ipHeader, unsigned char *Buffer, int Size) {
     struct udphdr *udpHeader = (struct udphdr *)(Buffer + ipHeader->ihl * 4 + ETH_HLEN);  //버퍼에서 udp 헤더 정보 get
@@ -889,7 +1031,7 @@ void StartMenuBoard() {
     system("clear");
     fprintf(stdout, "\n************************* 캡쳐 가능 프로토콜 **********************\n\n");
     fprintf(stdout, "   \033[100mprotocol\033[0m :      *(all) | tcp | udp | icmp \n");
-    fprintf(stdout, "   \033[100mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | icmp(*)]  \n");
+    fprintf(stdout, "   \033[100mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
     fprintf(stdout, "   \033[100mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
     fprintf(stdout, "   \033[100moptions\033[0m  :      a : Ascill | x : Hex | s : Summary  \n");
     fprintf(stdout, "\n**************************** Start Rule ***************************\n\n");
