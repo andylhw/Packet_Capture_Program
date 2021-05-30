@@ -462,7 +462,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
             
             	if (body) {
 	                if (encoding == length) {
-	                    if (p - body >= remaining) {
+	                    if (p - body >= remaining && body>=0x21 && body<=0x7e) {
 	                        printf("%.*s", remaining, body);
                         	break;
 	                    }
@@ -477,7 +477,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
 	                                break;
 	                            }
 	                        }
-                        	if (remaining && p - body >= remaining) {
+                        	if (remaining && p - body >= remaining && body>=0x21 && body<=0x7e) {
 	                            printf("%.*s", remaining, body);
 	                            body += remaining + 2;
 	                            remaining = 0;
@@ -516,7 +516,7 @@ void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Siz
 void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	//Server(1) Client(0)
 	int server = 0;
-	printf("Content Type: Handshake(22)\n");
+	fprintf(stdout, "Content Type: Handshake(22)\n");
 	idx+=2;
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "Version: TLS 1.0\n");
@@ -546,7 +546,26 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		fprintf(stdout, "Handshake Type: Server Hello\n");
 	}
 	if(httpsHeader[idx]==4){
-		fprintf(stdout, "Handshake Protocol: Finished\n");
+		fprintf(stdout, "Handshake Protocol: Server Hello Done\n");
+		idx+=3;
+		fprintf(stdout, "Length: %d\n", httpsHeader[idx]);
+		return;
+	}
+	
+	if(httpsHeader[idx]==16){
+		fprintf(stdout, "Handshake Protocol: Client Key Exchange\n");
+		idx+=3;
+		fprintf(stdout, "Length: %d\n", httpsHeader[idx]);
+		int ckLen=httpsHeader[idx];
+		idx++;
+		fprintf(stdout, "EC Diffie-Hellman Client Params\n");
+		fprintf(stdout, "PubKey Length: %d\n", ckLen-1);
+		for(int i=0;i<ckLen-1;i++){
+			fprintf(stdout, "%02x", httpsHeader[idx]);
+			idx++;
+			
+		}
+		return;
 	}
 	idx++;
 	int hSLength = httpsHeader[idx]*16*16*16*16;
@@ -577,10 +596,11 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	idx++;
 	fprintf(stdout, "Session ID: ");
 	for(int i=0;i<32;i++){
-		fprintf(stdout, "%02x", httpsHeader[idx+i]);
+		fprintf(stdout, "%02x", httpsHeader[idx]);
+		idx++;
 	}
+	//sleep(1);
 	fprintf(stdout, "\n");
-	idx+=32;
 	if(server == 1){
 		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x01){
 			fprintf(stdout, "Cipher Suite: TLS_AES_128_GCM_SHA256\n");
@@ -615,11 +635,57 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		int klen=httpsHeader[idx]*16*16;
 		idx++;
 		klen+=httpsHeader[idx];
-		fprintf(stdout, "Length: %d", klen);
-		
+		fprintf(stdout, "Length: %d\n", klen);
+		idx+=2;
+		if(httpsHeader[idx]==0x1d){
+			fprintf(stdout, "Group: x25519\n");
+		}
+		idx++;
+		int keLen = httpsHeader[idx]*16*16;
+		idx++;
+		keLen += httpsHeader[idx];
+		fprintf(stdout, "Key Exchange Length: %d\n", keLen);
+		idx++;
+		fprintf(stdout, "Key Exchange: ");
+		for(int i=0;i<32;i++){
+			fprintf(stdout, "%02x", httpsHeader[idx+i]);
+		}
+		fprintf(stdout, "\n");
+		idx++;
 	}
 	if(server == 0){
-	
+		int csLen = httpsHeader[idx]*16*16;
+		idx++;
+		csLen += httpsHeader[idx];
+		fprintf(stdout, "Cipher Suite Length: %d\n", csLen);
+		idx+=csLen;
+		idx++;
+		fprintf(stdout, "Compression Methods Length: %d\n", httpsHeader[idx]);
+		idx++;
+		fprintf(stdout, "Compression Methods: %d\n", httpsHeader[idx]);
+		idx++;
+		int extLen = httpsHeader[idx]*16*16;
+		idx++;
+		extLen+=httpsHeader[idx];
+		fprintf(stdout, "Extension Length: %d\n", extLen);
+		idx+=2;
+		if(httpsHeader[idx]==0){
+			fprintf(stdout, "Type: server_name\n");
+		}
+		idx++;
+		int extLen2 = httpsHeader[idx]*16*16;
+		idx++;
+		extLen2+=httpsHeader[idx];
+		fprintf(stdout, "Length: %d\n", extLen2);
+		idx++;
+		fprintf(stdout, "Server Name: ");
+		for(int k=0;k<extLen2;k++){
+			fprintf(stdout, "%c", httpsHeader[idx]);
+			idx++;
+		}
+		
+		
+		
 	}
 }
 void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct iphdr *ipHeader, unsigned char *Buffer, int Size) {
