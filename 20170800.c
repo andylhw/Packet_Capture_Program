@@ -305,17 +305,17 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             struct tm *tm = localtime(&itb.time);
             fprintf(stdout, "\n%02d:%02d:%02d:%03d IPv", tm->tm_hour, tm->tm_min, tm->tm_sec, itb.millitm);
             if (ntohs(tcpHeader->source) == http) {
-                fprintf(stdout, "%d %s:http > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr));
-                fprintf(stdout, "%s:%u = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
+                fprintf(stdout, "[%s]:%u(http) > ",  inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "[%s]:%u = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
             } else if (ntohs(tcpHeader->dest) == http) {
-                fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
-                fprintf(stdout, "%s:http = TCP Flags [", inet_ntoa(dest.sin_addr));
+                fprintf(stdout, "[%s]:%u > ",  inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "[%s]:%u(http) = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
             } else if (ntohs(tcpHeader->source) == https){
-            	fprintf(stdout, "%d %s:%u:https > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
-                fprintf(stdout, "%s: = TCP Flags [", inet_ntoa(dest.sin_addr));
+            	fprintf(stdout, "[%s]:%u(https) > ", inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "[%s]:%u = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
             } else if (ntohs(tcpHeader->dest) == https){
-            	fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
-                fprintf(stdout, "%s:https = TCP Flags [", inet_ntoa(dest.sin_addr));
+            	fprintf(stdout, "[%s]:%u > ", inet_ntoa(source.sin_addr), ntohs(tcpHeader->source));
+                fprintf(stdout, "[%s]:%u(https) = TCP Flags [", inet_ntoa(dest.sin_addr), ntohs(tcpHeader->dest));
             }
             
            	else {
@@ -332,7 +332,8 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
                     ntohs(tcpHeader->window), Size);
 
             /*print option에 따라 payload 부분 다르게 출력*/
-            /*ascill 출력*/
+            /*
+            ascill 출력
             if (!strcmp(printOption, "a")) {
                 fprintf(stdout, "\n\033[101methernet\033[0m");
                 Change_hex_to_ascii(captureData, Buffer, A, ETH_HLEN);  // ethernet
@@ -344,7 +345,7 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
                 Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof tcpHeader, A,
                                     (Size - sizeof tcpHeader - (ipHeader->ihl * 4) - ETH_HLEN));  // payload
             }
-            /*hex 출력*/
+            hex 출력
             else if (!strcmp(printOption, "x")) {
                 fprintf(stdout, "\n\033[101methernet\033[0m");
                 Change_hex_to_ascii(captureData, Buffer, X, ETH_HLEN);  // ethernet
@@ -356,6 +357,7 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
                 Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof tcpHeader, X,
                                     (Size - sizeof tcpHeader - (ipHeader->ihl * 4) - ETH_HLEN));  // payload
             }
+            */
             //http 출력.
             if(ntohs(tcpHeader->source) == http || ntohs(tcpHeader->dest) == http){
             	printf("\nHTTP DETECTED\n");
@@ -511,9 +513,55 @@ void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Siz
 		return;
 	}
 	if(httpsHeader[idx]==23){
-		printf("Content Type: Application Data\n");
+		https_appdata_capture(captureData, httpsHeader, idx);
 		return;
 	}
+}
+void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
+	fprintf(stdout, "Content Type: Application Data\n");
+	idx+=2;
+	int appLength=0;
+	if(httpsHeader[idx]==1){
+		fprintf(stdout, "Version: TLS 1.0\n");
+	}
+	if(httpsHeader[idx]==2){
+		fprintf(stdout, "Version: TLS 1.1\n");
+	}
+	if(httpsHeader[idx]==3){
+		fprintf(stdout, "Version: TLS 1.2\n");
+	}
+	idx++;
+	appLength += httpsHeader[idx]*16*16;
+	idx++;
+	appLength+=httpsHeader[idx];
+	fprintf(stdout, "Length: %d\n", appLength);
+	fprintf(stdout, "First Ten Encrypted Application Data: ");
+	if(appLength>10){
+		for(int i=0;i<10;i++){
+			fprintf(stdout, "%02x", httpsHeader[idx]);
+			idx++;
+		}
+		for(int i=0;i<appLength-10;i++){
+			idx++;
+		}
+	}
+	if(appLength<10){
+		for(int i=0;i<appLength;i++){
+			fprintf(stdout, "%02x", httpsHeader[idx]);
+			idx++;
+		}
+	}
+	fprintf(stdout, "\n");
+	fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
+	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		https_header_capture(captureData, httpsHeader+idx, idx);
+		return;
+	}else{
+		return;
+	}
+	
+	
+	
 }
 void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){	
 	fprintf(stdout, "Content Type: ChangeCipherSpec(20)\n");
@@ -534,8 +582,13 @@ void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	fprintf(stdout, "Length: %d\n", length);
 	idx++;
 	fprintf(stdout, "Change Cipher Spec Message\n");
+	idx++;
+	idx++;
+	fprintf(stdout, "next: %02x\n", httpsHeader[idx]);
 	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
 		https_header_capture(captureData, httpsHeader+idx, idx);
+		return;
+	}else{
 		return;
 	}
 	
@@ -562,7 +615,10 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	length+=httpsHeader[idx];
 	fprintf(stdout, "Length: %d\n", length);
 	idx++;
-	printf("Test value: %d\n", httpsHeader[idx]);
+	//printf("Test value: %d\n", httpsHeader[idx]);
+	if(httpsHeader[idx]> 5){
+		return;
+	}
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "\nHandshake Protocol: Client Hello\n");
 		fprintf(stdout, "Handshake Type: Client Hello\n");
@@ -573,11 +629,69 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		fprintf(stdout, "Handshake Type: Server Hello\n");
 	}
 	if(httpsHeader[idx]==4){
-		fprintf(stdout, "Handshake Protocol: Server Hello Done\n");
-		idx+=3;
-		fprintf(stdout, "Length: %d\n", httpsHeader[idx]);
+		fprintf(stdout, "Handshake Protocol: New Session Ticket\n");
+		idx+=2;
+		int ticketT = httpsHeader[idx]*256;
+		idx++;
+		ticketT +=httpsHeader[idx];
+		fprintf(stdout, "Session Ticket Lifecycle Hint: %d\n", ticketT);
+		idx++;
+		int ticketLen = httpsHeader[idx]*256;
+		idx++;
+		ticketLen += httpsHeader[idx];
+		fprintf(stdout, "Session Ticket Length: %d\n", ticketLen);
+		idx++;
+		fprintf(stdout, "First Ten Session Ticket: ");
+		if(ticketLen>10){
+			for(int i=0;i<10;i++){
+				fprintf(stdout, "%02x", httpsHeader[idx]);
+				idx++;
+			}
+			for(int i=0;i<ticketLen-10;i++){
+				idx++;
+			}
+		}
+		if(ticketLen<10){
+			for(int i=0;i<ticketLen;i++){
+				fprintf(stdout, "%02x", httpsHeader[idx]);
+				idx++;
+			}
+		}
+		fprintf(stdout, "\n");
+		fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+			https_header_capture(captureData, httpsHeader+idx, idx);
+			return;
+		}else{
+			return;
+		}
+		
 		return;
 	}
+	if(httpsHeader[idx]==11){
+		fprintf(stdout, "Handshake Protocol: Certificate\n");
+		fprintf(stdout, "Handshake Type: Certificate\n");
+		idx+=2;
+		int cerLen = httpsHeader[idx]*256;
+		idx++;
+		cerLen += httpsHeader[idx];
+		fprintf(stdout, "Certificate Length: %d\n", cerLen);
+		idx+=cerLen+1;
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+			https_header_capture(captureData, httpsHeader+idx, idx);
+			return;
+		}else{
+			return;
+		}		
+		return;		
+	}
+	if(httpsHeader[idx]==14){
+		fprintf(stdout, "Handshake Protocol: Server Hello Done\n");
+		fprintf(stdout, "Handshake Type: Server Hello Done\n");
+		fprintf(stdout, "Length: 0\n");
+		return;		
+	}
+	
 	
 	if(httpsHeader[idx]==16){
 		fprintf(stdout, "Handshake Protocol: Client Key Exchange\n");
@@ -590,9 +704,13 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		for(int i=0;i<ckLen-1;i++){
 			fprintf(stdout, "%02x", httpsHeader[idx]);
 			idx++;
-			
 		}
-		return;
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+			https_header_capture(captureData, httpsHeader+idx, idx);
+			return;
+		}else{
+			return;
+		}
 	}
 	idx++;
 	int hSLength = httpsHeader[idx]*16*16*16*16;
@@ -647,6 +765,8 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		idx++;
 		extLength+=httpsHeader[idx];
 		fprintf(stdout, "Extensions Length: %d\n", extLength);
+			
+		/*
 		idx+=6;
 		if(httpsHeader[idx]==4){
 			fprintf(stdout,"Extension: supported version\n");
@@ -654,6 +774,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			fprintf(stdout,"Length: 2\n");
 			fprintf(stdout,"Supported Version: TLS 1.3\n");
 		}
+		*/
 		idx+=2;
 		if(httpsHeader[idx]==51){
 			fprintf(stdout,"Type: Key share\n");
@@ -1006,6 +1127,7 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
                 printf("Address ");
                 int j;
                 for (j = 0; j < ansLength; j+=2) {
+               
                     printf("%02x%02x", dnsHeader[idx+j], dnsHeader[idx+j+1]);
                     fprintf(captureData, "%02x%02x", dnsHeader[idx+j], dnsHeader[idx+j+1]);
                     if (j + 2 < ansLength) {
@@ -1021,15 +1143,18 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
         printf("CNAME: ");
         fprintf(captureData, "                    CNAME            |   ");
         char cHeader[50];
-	        for(int j=0;j<ansLength;j++){
-	        	if (dnsHeader[idx] == 0) break;
-		        if (dnsHeader[idx] >= 32 && dnsHeader[idx] < 128){
-		            fprintf(stdout, "%c", (unsigned char)dnsHeader[idx]);  // data가 ascii라면 출력
-		            fprintf(captureData, "%c", (unsigned char)dnsHeader[idx]);
-		        }
-		        else{
-		            fprintf(stdout, ".");  //그외 데이터는 . 으로 표현
-		            fprintf(captureData, ".");
+        
+	        for(int j=0;j<ansLength-1;j++){
+	        	if(j!=0){
+		        	if (dnsHeader[idx] == 0) break;
+			        if (dnsHeader[idx] >= 32 && dnsHeader[idx] < 128){
+		            	fprintf(stdout, "%c", (unsigned char)dnsHeader[idx]);  // data가 ascii라면 출력
+			            fprintf(captureData, "%c", (unsigned char)dnsHeader[idx]);
+			        }
+		        	else{
+			            fprintf(stdout, ".");  //그외 데이터는 . 으로 표현
+			            fprintf(captureData, ".");
+				}
 			}
 			idx++;
     		}
@@ -1123,7 +1248,7 @@ void MenuBoard() {
 void StartMenuBoard() {
     system("clear");
     fprintf(stdout, "\n************************* 캡쳐 가능 프로토콜 **********************\n\n");
-    fprintf(stdout, "   \033[100mprotocol\033[0m :      *(all) | tcp | udp | icmp \n");
+    fprintf(stdout, "   \033[100mprotocol\033[0m :      *(all) | tcp(to capture http/https) | udp(to capture ARP, DNS) ");
     fprintf(stdout, "   \033[100mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
     fprintf(stdout, "   \033[100mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
     fprintf(stdout, "   \033[100moptions\033[0m  :      a : Ascill | x : Hex | s : Summary  \n");
@@ -1198,9 +1323,8 @@ void Menu_helper() {
 bool start_helper(char *str) {
     /*protocol*/
     char *option = strtok(str, " ");
-    if (strcmp(option, "*") && strcmp(option, "tcp") && strcmp(option, "udp") && strcmp(option, "icmp") && strcmp(option, "http") &&
-        strcmp(option, "dns")) {
-        fprintf(stderr, "* | tcp | udp | icmp | http | dns 만 캡쳐가능합니다.\n");
+    if (strcmp(option, "*") && strcmp(option, "tcp") && strcmp(option, "udp")) {
+        fprintf(stderr, "* | tcp | udp 만 캡쳐가능합니다.\n");
         return false;
     }
     strcpy(protocolOption, option);
