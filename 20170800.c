@@ -1251,7 +1251,6 @@ void StartMenuBoard() {
     fprintf(stdout, "   \033[100mprotocol\033[0m :      *(all) | tcp(to capture http/https) | udp(to capture ARP, DNS) ");
     fprintf(stdout, "   \033[100mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
     fprintf(stdout, "   \033[100mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
-    fprintf(stdout, "   \033[100moptions\033[0m  :      a : Ascill | x : Hex | s : Summary  \n");
     fprintf(stdout, "\n**************************** Start Rule ***************************\n\n");
     fprintf(stdout,
             "                입력 순서 :  \033[100mprotocol\033[0m \033[100mport\033[0m \033[100mip\033[0m \033[100moption\033[0m \n");
@@ -1339,7 +1338,6 @@ bool start_helper(char *str) {
 
     /*ip 주소*/
     option = strtok(NULL, " ");
-    char *pOption = strtok(NULL, "\0");
     char s[48];
     strcpy(s, option);
     if (!IsIpAddress(s)) {
@@ -1348,12 +1346,7 @@ bool start_helper(char *str) {
     }
     strcpy(ipOption, option);
 
-    /*출력 option*/
-    if (strcmp(pOption, "a") && strcmp(pOption, "s") && strcmp(pOption, "x")) {
-        fprintf(stderr, "잘못된 Option 입니다.\n");
-        return false;
-    }
-    strcpy(printOption, pOption);
+
 
     return true;
 }
