@@ -295,7 +295,7 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
 
     // filter ip 검사
     if (!strcmp(ipOption, "*") || !strcmp(inet_ntoa(source.sin_addr), ipOption) ||
-        !strcmp(inet_ntoa(dest.sin_addr), ipOption)) {  
+        !strcmp(inet_ntoa(dest.sin_addr), ipOption)) {
         // filter port번호 검사
         if (!strcmp(portOption, "*") || (atoi(portOption) == (int)ntohs(tcpHeader->source)) ||
             (atoi(portOption) == (int)ntohs(tcpHeader->dest))) {
@@ -366,7 +366,7 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             //https 출력
             if(ntohs(tcpHeader->source) == https || ntohs(tcpHeader->dest) == https){
             	printf("\nHTTPS DETECTED\n");
-            	https_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
+            	https_header_print(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
             }
             /*file 출력*/
             Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
@@ -429,7 +429,6 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
     while(1){
     	    
             if (!body && (body = strstr(response, "\r\n\r\n"))) {
-            
                 *body = 0;
                 body += 4;
 		
@@ -495,20 +494,28 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
     finish:
     	printf("\n");
 }
-
+void https_header_print(FILE *captureData, unsigned char *httpsHeader, int Size){
+	fprintf(captureData, "\n           --------------------------------------------------------\n");
+    	fprintf(captureData, "          |                      HTTPS Header                      |\n");
+    	fprintf(captureData, "           --------------------------------------------------------\n");
+    	https_header_capture(captureData, httpsHeader, Size);
+}
 void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size){
 	int idx = 0;
 	for(int i=0;i<10;i++){
-		printf("%02X ", httpsHeader[i]);	
+		printf("%02X ", httpsHeader[i]);
 	}
 	printf("\n");
-	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23)
+	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23), Encrypted Alert(21)
 	if(httpsHeader[idx]==20){
 		https_ccs_capture(captureData, httpsHeader, idx);
 		return;
 	}
+	if(httpsHeader[idx]==21){
+		https_encalert_capture(captureData, httpsHeader, idx);
+		return;
+	}
 	if(httpsHeader[idx]==22){
-		printf("HANDSHAKE DETECTED\n");
 		https_handshake_capture(captureData, httpsHeader, idx);
 		return;
 	}
@@ -517,28 +524,50 @@ void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Siz
 		return;
 	}
 }
+void https_encalert_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
+	fprintf(captureData, "             Content Type            |   Encrypted Alert(21)\n");
+	idx++;
+	int alertLen = httpsHeader[idx];
+	
+	fprintf(captureData, "             Version                 |   TLS 1.2\n");
+	fprintf(captureData, "             Length                  |   %d\n", alertLen);
+	idx++;
+	fprintf(captureData, "             Alert Message           |   Encrypted Alert\n");
+	for(int i=0;i<alertLen;i++){
+		idx++;
+	}
+	return;
+}
 void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	fprintf(stdout, "Content Type: Application Data\n");
+	fprintf(captureData, "             Content Type            |   Application Data(23)\n");
 	idx+=2;
 	int appLength=0;
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "Version: TLS 1.0\n");
+		fprintf(captureData, "             Version                 |   TLS 1.0\n");
+
 	}
 	if(httpsHeader[idx]==2){
 		fprintf(stdout, "Version: TLS 1.1\n");
+		fprintf(captureData, "             Version                 |   TLS 1.1\n");
 	}
 	if(httpsHeader[idx]==3){
+		fprintf(captureData, "             Version                 |   TLS 1.2\n");
 		fprintf(stdout, "Version: TLS 1.2\n");
 	}
 	idx++;
 	appLength += httpsHeader[idx]*16*16;
 	idx++;
 	appLength+=httpsHeader[idx];
+	fprintf(captureData, "             Length                  |   %d\n", appLength);
+	fprintf(captureData, "             First Ten Enc  AppData  |   ");
 	fprintf(stdout, "Length: %d\n", appLength);
 	fprintf(stdout, "First Ten Encrypted Application Data: ");
 	if(appLength>10){
 		for(int i=0;i<10;i++){
 			fprintf(stdout, "%02x", httpsHeader[idx]);
+			fprintf(captureData, "%02x", httpsHeader[idx]);
 			idx++;
 		}
 		for(int i=0;i<appLength-10;i++){
@@ -548,11 +577,16 @@ void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int id
 	if(appLength<10){
 		for(int i=0;i<appLength;i++){
 			fprintf(stdout, "%02x", httpsHeader[idx]);
+			fprintf(captureData, "%02x", httpsHeader[idx]);
 			idx++;
 		}
 	}
 	fprintf(stdout, "\n");
-	fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
+	fprintf(captureData, "\n");
+	
+	//DEBUG
+	//fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
+	
 	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
 		https_header_capture(captureData, httpsHeader+idx, idx);
 		return;
@@ -565,14 +599,19 @@ void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int id
 }
 void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){	
 	fprintf(stdout, "Content Type: ChangeCipherSpec(20)\n");
+	fprintf(captureData, "             Content Type            |   ChangeCipherSpec(20)\n");
 	idx+=2;
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "Version: TLS 1.0\n");
+		fprintf(captureData, "             Version                 |   TLS 1.0\n");
+
 	}
 	if(httpsHeader[idx]==2){
 		fprintf(stdout, "Version: TLS 1.1\n");
+		fprintf(captureData, "             Version                 |   TLS 1.1\n");
 	}
 	if(httpsHeader[idx]==3){
+		fprintf(captureData, "             Version                 |   TLS 1.2\n");
 		fprintf(stdout, "Version: TLS 1.2\n");
 	}
 	int length = httpsHeader[idx]*16*16;
@@ -597,14 +636,19 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	//Server(1) Client(0)
 	int server = 0;
 	fprintf(stdout, "Content Type: Handshake(22)\n");
+	fprintf(captureData, "             Content Type            |   Handshake(22)\n");
 	idx+=2;
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "Version: TLS 1.0\n");
+		fprintf(captureData, "             Version                 |   TLS 1.0\n");
+
 	}
 	if(httpsHeader[idx]==2){
 		fprintf(stdout, "Version: TLS 1.1\n");
+		fprintf(captureData, "             Version                 |   TLS 1.1\n");
 	}
 	if(httpsHeader[idx]==3){
+		fprintf(captureData, "             Version                 |   TLS 1.2\n");
 		fprintf(stdout, "Version: TLS 1.2\n");
 	}
 	idx++;
@@ -614,6 +658,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	
 	length+=httpsHeader[idx];
 	fprintf(stdout, "Length: %d\n", length);
+	fprintf(captureData, "             Length                  |   %d\n", length);
 	idx++;
 	//printf("Test value: %d\n", httpsHeader[idx]);
 	if(httpsHeader[idx]> 5){
@@ -622,29 +667,45 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	if(httpsHeader[idx]==1){
 		fprintf(stdout, "\nHandshake Protocol: Client Hello\n");
 		fprintf(stdout, "Handshake Type: Client Hello\n");
+
+		fprintf(captureData, "             Handshake Protocol      |   Client Hello\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Client Hello\n");
 	}
 	if(httpsHeader[idx]==2){
 		server=1;
 		fprintf(stdout, "Handshake Protocol: Server Hello\n");
 		fprintf(stdout, "Handshake Type: Server Hello\n");
+		fprintf(captureData, "             Handshake Protocol      |   Server Hello\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Server Hello\n");
 	}
 	if(httpsHeader[idx]==4){
 		fprintf(stdout, "Handshake Protocol: New Session Ticket\n");
+		fprintf(captureData, "             Handshake Protocol      |   New Session Ticket\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
 		idx+=2;
 		int ticketT = httpsHeader[idx]*256;
 		idx++;
 		ticketT +=httpsHeader[idx];
 		fprintf(stdout, "Session Ticket Lifecycle Hint: %d\n", ticketT);
+		fprintf(captureData, "       Session Ticket Lifecycle Hint |   %d\n", ticketT);
+
 		idx++;
 		int ticketLen = httpsHeader[idx]*256;
 		idx++;
 		ticketLen += httpsHeader[idx];
 		fprintf(stdout, "Session Ticket Length: %d\n", ticketLen);
+		fprintf(captureData, "             Session Ticket Length   |   %d\n", ticketLen);
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Server Hello\n");
 		idx++;
 		fprintf(stdout, "First Ten Session Ticket: ");
+		fprintf(captureData, "             First Ten Session Ticket|   ");
 		if(ticketLen>10){
 			for(int i=0;i<10;i++){
 				fprintf(stdout, "%02x", httpsHeader[idx]);
+				fprintf(captureData, "%02x", httpsHeader[idx]);
 				idx++;
 			}
 			for(int i=0;i<ticketLen-10;i++){
@@ -654,11 +715,15 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		if(ticketLen<10){
 			for(int i=0;i<ticketLen;i++){
 				fprintf(stdout, "%02x", httpsHeader[idx]);
+				fprintf(captureData, "%02x", httpsHeader[idx]);
 				idx++;
 			}
 		}
 		fprintf(stdout, "\n");
-		fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
+		fprintf(captureData, "\n");
+		
+		//DEBUG
+		//fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
 		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
@@ -671,11 +736,15 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	if(httpsHeader[idx]==11){
 		fprintf(stdout, "Handshake Protocol: Certificate\n");
 		fprintf(stdout, "Handshake Type: Certificate\n");
+		fprintf(captureData, "             Handshake Protocol      |   Certificate\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Certificate\n");
 		idx+=2;
 		int cerLen = httpsHeader[idx]*256;
 		idx++;
 		cerLen += httpsHeader[idx];
 		fprintf(stdout, "Certificate Length: %d\n", cerLen);
+		fprintf(captureData, "             Certificate Length      |   %d\n", cerLen);
 		idx+=cerLen+1;
 		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
@@ -688,19 +757,35 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	if(httpsHeader[idx]==14){
 		fprintf(stdout, "Handshake Protocol: Server Hello Done\n");
 		fprintf(stdout, "Handshake Type: Server Hello Done\n");
+		fprintf(captureData, "             Handshake Protocol      |   Server Hello Done\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Server Hello Done\n");
 		fprintf(stdout, "Length: 0\n");
+		fprintf(captureData, "             Length                  |   0\n");
 		return;		
 	}
 	
 	
 	if(httpsHeader[idx]==16){
+		fprintf(captureData, "             Handshake Protocol      |   Client Key Exchange\n");
+		fprintf(captureData, "           --------------------------------------------------------\n");
+		fprintf(captureData, "             Handshake Type          |   Client Key Exchange\n");
 		fprintf(stdout, "Handshake Protocol: Client Key Exchange\n");
 		idx+=3;
 		fprintf(stdout, "Length: %d\n", httpsHeader[idx]);
+		fprintf(captureData, "             Length                  |   %d\n", httpsHeader[idx]);		
 		int ckLen=httpsHeader[idx];
 		idx++;
+		
+		fprintf(captureData, "             Params                  |   EC Diffie-Hellman Client \n");
+		fprintf(captureData, "           --------------------------------------------------------\n");		
 		fprintf(stdout, "EC Diffie-Hellman Client Params\n");
 		fprintf(stdout, "PubKey Length: %d\n", ckLen-1);
+		fprintf(captureData, "             PubKey Length           |   %d\n", ckLen-1);
+		fprintf(captureData, "             PubKey(10)              |   ", ckLen-1);
+		for(int i=0;i<10;i++){
+			fprintf(captureData, "02x", httpsHeader[idx+i]);
+		}
 		for(int i=0;i<ckLen-1;i++){
 			fprintf(stdout, "%02x", httpsHeader[idx]);
 			idx++;
@@ -738,14 +823,17 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	fprintf(stdout, "\n");
 	idx+=32;
 	fprintf(stdout, "Session Length: %d\n", httpsHeader[idx]);
+	int sesLength = httpsHeader[idx];
 	idx++;
-	fprintf(stdout, "Session ID: ");
-	for(int i=0;i<32;i++){
-		fprintf(stdout, "%02x", httpsHeader[idx]);
-		idx++;
+	if(sesLength>0){
+		fprintf(stdout, "Session ID: ");
+		for(int i=0;i<sesLength;i++){
+			fprintf(stdout, "%02x", httpsHeader[idx]);
+			idx++;
+		}
+		fprintf(stdout, "\n");
 	}
 	//sleep(1);
-	fprintf(stdout, "\n");
 	if(server == 1){
 		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x01){
 			fprintf(stdout, "Cipher Suite: TLS_AES_128_GCM_SHA256\n");
@@ -1235,32 +1323,39 @@ void Change_hex_to_ascii(FILE *captureData, unsigned char *data, int op, int Siz
 
 void MenuBoard() {
     system("clear");
-    fprintf(stdout, "\n************************** WELCOME ************************\n");
-    fprintf(stdout, "*                    Custom Packet Capture                *\n");
-    fprintf(stdout, "**************************** Menu *************************\n\n");
+    fprintf(stdout, "                     5종 패킷 분석 프로그램                \n");
+    fprintf(stdout, "**************************** Menu **************************\n\n");
     fprintf(stdout, "                     1. Capture start \n");
     fprintf(stdout, "                     2. Capture stop \n");
     fprintf(stdout, "                     3. show menu \n");
+    fprintf(stdout, "                     4. show credit \n");
     fprintf(stdout, "                     0. exit \n");
     fprintf(stdout, " \n**********************************************************\n\n");
 }
 
 void StartMenuBoard() {
     system("clear");
-    fprintf(stdout, "\n************************* 캡쳐 가능 프로토콜 **********************\n\n");
-    fprintf(stdout, "   \033[100mprotocol\033[0m :      *(all) | tcp(to capture http/https) | udp(to capture ARP, DNS) ");
-    fprintf(stdout, "   \033[100mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
-    fprintf(stdout, "   \033[100mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
-    fprintf(stdout, "\n**************************** Start Rule ***************************\n\n");
+    fprintf(stdout, "\n****************************** Options ****************************\n\n");
+    fprintf(stdout, "   \033[mprotocol\033[0m : *(all)(ARP) | tcp(http/https) | udp(DNS) \n");
+    fprintf(stdout, "   \033[mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
+    fprintf(stdout, "   \033[mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
+    fprintf(stdout, "\n****************************** Example ****************************\n\n");
     fprintf(stdout,
-            "                입력 순서 :  \033[100mprotocol\033[0m \033[100mport\033[0m \033[100mip\033[0m \033[100moption\033[0m \n");
+            "                입력 순서 :  \033[100mprotocol\033[0m \033[100mport\033[0m \033[100mip\033[0m \n");
     fprintf(stdout, "\n*******************************************************************\n\n");
 }
-
+void CreditBoard(){
+	system("clear");
+	fprintf(stdout, "************************** CREDIT *************************\n");
+	fprintf(stdout, "\033[mAuthor\033[0m  :    Lee Hwa Won\n");
+	fprintf(stdout, "\033[mMajor\033[0m   :    School of Software\n");
+	fprintf(stdout, "\033[mgithub\033[0m  :    http://www.github.com/andylhw\n");
+	fprintf(stdout, "\033[mDate\033[0m    :    May 2021\n");		
+}
 void Menu_helper() {
     int isDigit, menuItem;  // menu판 입력 변수  ( isDigit = 1:숫자  false: 숫자아님 / menuItem : 메뉴번호)
-    pthread_t capture_thd;  //패킷 캡쳐 스레드
-    int rawSocket;          // raw socket
+    pthread_t capture_thd;  // Thread to capture packet
+    int rawSocket;          // raw socket - 사용해서 받을 예정
     char str[128];
 
     if ((rawSocket = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1)  // raw socket 생성
@@ -1272,7 +1367,7 @@ void Menu_helper() {
     //프로그램 종료시까지 반복
     MenuBoard();
     while (1) {
-        fprintf(stdout, "\n   \033[93m메뉴 번호 입력 :\033[0m ");
+        fprintf(stdout, "\n   \033[m메뉴 번호 입력 :\033[0m ");
         isDigit = scanf("%d", &menuItem);  //메뉴판 번호 입력
         buffer_flush();                    //입력버퍼 flush
 
@@ -1313,7 +1408,10 @@ void Menu_helper() {
         } else if (menuItem == 3 && isDigit == 1)  // show Menu
         {
             MenuBoard();
-        } else {  // exception handling
+        } else if (menuItem == 4 && isDigit == 1)
+        {
+            CreditBoard();
+        }else {  // exception handling
             fprintf(stderr, "잘못 입력하셨습니다 !!\n\n");
         }
     }
