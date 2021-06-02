@@ -1293,6 +1293,43 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 		}else if(dhcpHeader[idx]==255){
 			fprintf(stdout, "Option: (%d) End\n", dhcpHeader[idx]);
 			done=0;
+		}else if(dhcpHeader[idx]==1){
+			fprintf(stdout, "Option: (%d) Subnet Mask\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Subnet Mask: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+			idx+=4;
+		}else if(dhcpHeader[idx]==3){
+			fprintf(stdout, "Option: (%d) Router\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Router: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+			idx+=4;
+		}else if(dhcpHeader[idx]==6){
+			fprintf(stdout, "Option: (%d) Domain Name Server\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			int dnsLen = dhcpHeader[idx];
+			idx++;
+			for(int i=0;i<dnsLen/4;i++){
+				fprintf(stdout, "Domain Name Server: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+				idx+=4;
+			}
+		}else if(dhcpHeader[idx]==15){
+			fprintf(stdout, "Option: (%d) Domain Name\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			int dnLength = dhcpHeader[idx];
+			idx++;
+			fprintf(stdout, "Domain Name: ");
+			for(int i=0;i<dnLength;i++){
+				fprintf(stdout, "%c", dhcpHeader[idx]);
+				idx++;
+			}
+			fprintf(stdout, "\n");
+			
 		}else{
 			fprintf(stdout, "Option: (%d) Not Pre-coded type\n", dhcpHeader[idx]);
 			idx++;
