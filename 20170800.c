@@ -58,7 +58,8 @@ typedef struct arpheader {
     
 }arphdr_t; 
 void *PacketCapture_thread(void *arg);  //캡쳐 스레드
-
+void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size);
+void Arp_header_print(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size);
 void Capture_helper(FILE *captureFile, unsigned char *, int);                                       //캡쳐한 패킷 프로토콜 분류
 void Ethernet_header_fprint(FILE *captureFile, struct iphdr *);                                     // Ethernet 헤더 정보 fprint
 void Ip_header_fprint(FILE *captureFile, struct iphdr *, struct sockaddr_in, struct sockaddr_in);   // ip 헤더 정보 fprint
@@ -80,18 +81,24 @@ bool IsPort(char *);        //포트 형식 검사 | 맞으면 true
 bool IsIpAddress(char *);   // ip 형식 검사 | 맞으면 true
 bool IsDigit();             // string 이 숫자인지 검사 | 맞으면 true
 void buffer_flush();        //입력 버퍼 지우기
+void http_header_capture(FILE *captureData, unsigned char *response, int Size);
+void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size);
+void https_header_print(FILE *captureData, unsigned char *httpsHeader, int Size);
+void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx);
+void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx);
+void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int idx);
+void https_encalert_capture(FILE *captureData, unsigned char *httpsHeader, int idx);
 
+void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size);
 bool captureStart = false;                                                   //캡쳐 스레드 시작flag 변수
 int total = 0, filter = 0, drop = 0;                                         //캡쳐한 패킷 갯수
 int arpMode = 0, dnsMode = 0, httpMode = 0, httpsMode = 0, dhcpMode = 0;     //각각의 Mode값에 따라서, 캡쳐하는게 달라질꺼임.
 char protocolOption[128], portOption[128], ipOption[128], printOption[128];  // filter option 변수
-
 int main() {
     Menu_helper();
 
     return 0;
 }
-
 void *PacketCapture_thread(void *arg) {
     int rawSocket = *(int *)arg;                                   // raw socket 전달 받기
     int dataSize;                                                  //받은 데이터 정보 크기
@@ -129,7 +136,7 @@ void Capture_helper(FILE *captureData, unsigned char *buffer, int size) {
     total++;                                                       // recv한 모든 패킷 수 증가
 	
     /*IPv4의 모든 프로토콜 (ETH_P_IP == 0800)*/
-    char *Ptr = &etherHeader->h_proto;
+    char *Ptr = (char*)&etherHeader->h_proto;
     //ARP DETECTION. ARP == 0806 
     if (*Ptr == 8 && *(Ptr+1)==6){
     	printf("ARP HEADER DETECTED\n\n");\
@@ -210,12 +217,15 @@ void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ar
 		case ARPHRD_EETHER:
 			printf("Experimental Ethernet]\n");
 			arpHeader->strhType="Experimental Ethernet";
+			break;
 		case ARPHRD_AX25:
 			printf("AX.25 Level 2]\n");
 			arpHeader->strhType="AX.25 Level 2";
+			break;
 		case ARPHRD_IEEE802:
 			printf("IEEE 802.2 Ethernet/TR/TB]\n");
 			arpHeader->strhType="IEEE 802.2 Ethernet/TR/TB";
+			break;
 		default:
 			printf("Other type...]\n");
 			arpHeader->strhType="Unknown Type";
@@ -241,6 +251,7 @@ void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ar
 		case ARPOP_RREQUEST:
 			printf("RARP Request]\n");
 			arpHeader->strOp = "RARP Request";
+			break;
 		case ARPOP_RREPLY:
 			printf("RARP Reply]\n");
 			arpHeader->strOp = "RARP Reply";
@@ -359,6 +370,8 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             }
             */
             //http 출력.
+            
+            Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
             if(ntohs(tcpHeader->source) == http || ntohs(tcpHeader->dest) == http){
             	printf("\nHTTP DETECTED\n");
             	http_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
@@ -369,7 +382,6 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             	https_header_print(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
             }
             /*file 출력*/
-            Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
             
         }
     }
@@ -405,7 +417,7 @@ void Tcp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *
 
     /* 패킷 정보(payload) Hex dump 와 ASCII 변환 데이터 파일에 출력 */
     Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + tcpHeader->doff * 4, F, (Size - tcpHeader->doff * 4 - (ipHeader->ihl * 4) - ETH_HLEN));
-    fprintf(captureData, "\n===============================================================================\n");
+    //fprintf(captureData, "\n===============================================================================\n");
 }
 #define RESPONSE_SIZE 32768
 
@@ -463,7 +475,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
             
             	if (body) {
 	                if (encoding == length) {
-	                    if (p - body >= remaining && body>=0x21 && body<=0x7e) {
+	                    if (p - body >= remaining && *body>=0x21 && *body<=0x7e) {
 	                        printf("%.*s", remaining, body);
                         	break;
 	                    }
@@ -478,7 +490,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
 	                                break;
 	                            }
 	                        }
-                        	if (remaining && p - body >= remaining && body>=0x21 && body<=0x7e) {
+                        	if (remaining && p - body >= remaining && *body>=0x21 && *body<=0x7e) {
 	                            printf("%.*s", remaining, body);
 	                            body += remaining + 2;
 	                            remaining = 0;
@@ -614,6 +626,7 @@ void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 		fprintf(captureData, "             Version                 |   TLS 1.2\n");
 		fprintf(stdout, "Version: TLS 1.2\n");
 	}
+	idx++;
 	int length = httpsHeader[idx]*16*16;
 	//printf("first length: %d", length);
 	idx++;
@@ -635,6 +648,9 @@ void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	//Server(1) Client(0)
 	int server = 0;
+	if(!(httpsHeader[idx]==22 && httpsHeader[idx]==3)){
+		return;
+	}
 	fprintf(stdout, "Content Type: Handshake(22)\n");
 	fprintf(captureData, "             Content Type            |   Handshake(22)\n");
 	idx+=2;
@@ -782,9 +798,9 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		fprintf(stdout, "EC Diffie-Hellman Client Params\n");
 		fprintf(stdout, "PubKey Length: %d\n", ckLen-1);
 		fprintf(captureData, "             PubKey Length           |   %d\n", ckLen-1);
-		fprintf(captureData, "             PubKey(10)              |   ", ckLen-1);
+		fprintf(captureData, "             PubKey(10)              |   ");
 		for(int i=0;i<10;i++){
-			fprintf(captureData, "02x", httpsHeader[idx+i]);
+			fprintf(captureData, "%02x", httpsHeader[idx+i]);
 		}
 		for(int i=0;i<ckLen-1;i++){
 			fprintf(stdout, "%02x", httpsHeader[idx]);
@@ -952,7 +968,18 @@ void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
                 fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(udpHeader->source));
                 fprintf(stdout, "%s:dns = UDP ", inet_ntoa(dest.sin_addr));
                 Dns_header_frpint(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, Size);
-            } else {
+            }
+            //if Port Number is DHCP(67)
+            else if(ntohs(udpHeader->source) == 67){
+            	fprintf(stdout, "%d %s:dns > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr));
+                fprintf(stdout, "%s:%u = UDP ", inet_ntoa(dest.sin_addr), ntohs(udpHeader->dest));
+            }
+            else if(ntohs(udpHeader->dest) == 67){
+            	fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(udpHeader->source));
+                fprintf(stdout, "%s:DHCP = UDP ", inet_ntoa(dest.sin_addr));
+                dhcp_header_fprint(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, Size);
+            }
+            else {
                 fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(udpHeader->source));
                 fprintf(stdout, "%s:%u = UDP ", inet_ntoa(dest.sin_addr), ntohs(udpHeader->dest));
             }
@@ -1007,6 +1034,214 @@ void Udp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *
     Change_hex_to_ascii(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, F,
                         (Size - sizeof udpHeader - (ipHeader->ihl * 4) - ETH_HLEN));
 }
+void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
+	int idx = 0;
+	if(dhcpHeader[idx] == 1){
+		fprintf(stdout, "Boot Request (%d)\n", dhcpHeader[idx]);
+	}
+	if(dhcpHeader[idx] == 2){
+		fprintf(stdout, "Boot Reply (%d)\n", dhcpHeader[idx]);
+	}
+	idx++;
+	if(dhcpHeader[idx] == 1){
+		fprintf(stdout, "Hardware Type: Ethernet (0x%02x)\n", dhcpHeader[idx]);
+	}
+	idx++;
+	fprintf(stdout, "Hardware address length: %d\n", dhcpHeader[idx]);
+	idx++;
+	fprintf(stdout, "Hops: %d\n", dhcpHeader[idx]);
+	idx++;
+	fprintf(stdout, "Transaction ID: %02x%02x", dhcpHeader[idx], dhcpHeader[idx+1]);
+	idx+=2;
+	fprintf(stdout, "\n");
+	int secelap = dhcpHeader[idx]*256;
+	idx++;
+	secelap+=dhcpHeader[idx];
+	fprintf(stdout, "Seconds elapsed: %d\n", dhcpHeader[idx]);
+	idx++;
+	if(dhcpHeader[idx]==0 &&dhcpHeader[idx+1] ==0){
+		fprintf(stdout, "Bootp flags: 0x0000 (Unicast)\n");
+	}
+	idx+=2;
+	fprintf(stdout, "Client IP address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+	idx+=4;
+	fprintf(stdout, "Your (client) IP address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+	idx+=4;
+	fprintf(stdout, "Next server IP address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+	idx+=4;
+	fprintf(stdout, "Relay agent IP address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+	idx+=4;
+	if(dhcpHeader[idx+3]==0x69 && dhcpHeader[idx+4]==0x5e && dhcpHeader[idx+5]==0xd5){
+		fprintf(stdout, "Client MAC address: Apple_69:5e:d5 (%02x:%02x:%02x:%02x:%02x:%02x)\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3], dhcpHeader[idx+4], dhcpHeader[idx+5]);
+		
+		idx+=6;
+	}else{
+		fprintf(stdout, "Client MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3], dhcpHeader[idx+4], dhcpHeader[idx+5]);
+		idx+=6;
+	}
+	fprintf(stdout, "Client hardware address padding: ");
+	for(int i=0;i<10;i++){
+		fprintf(stdout, "00");
+		idx++;
+	}
+	fprintf(stdout, "\n");
+	if(dhcpHeader[idx]==0 && dhcpHeader[idx+1]==0 && dhcpHeader[idx+2]==0){
+		fprintf(stdout, "Server host name not given\n");
+		idx+=64;
+	}else{
+		fprintf(stdout, "Server host name: ");
+		for(int i=0;i<64;i++){
+			if(dhcpHeader[idx]>=0x20 && dhcpHeader[idx]<=0x7e){
+				fprintf(stdout, "%c", dhcpHeader[idx]);
+			}
+			idx++;
+		}
+		fprintf(stdout, "\n");
+	}
+		
+	if(dhcpHeader[idx]==0 && dhcpHeader[idx+1]==0 && dhcpHeader[idx+2]==0){
+		fprintf(stdout, "Boot file name not given\n");
+		idx+=128;
+	}else{
+		fprintf(stdout, "Boot file name: ");
+		for(int i=0;i<128;i++){
+			if(dhcpHeader[idx]>=0x20 && dhcpHeader[idx]<=0x7e){
+				fprintf(stdout, "%c", dhcpHeader[idx]);				
+			}
+			idx++;
+		}	
+		fprintf(stdout, "\n");
+	}
+	if(dhcpHeader[idx] == 0x63 && dhcpHeader[idx+1] == 0x82 && dhcpHeader[idx+2] == 0x53 && dhcpHeader[idx+3]==0x63){
+		fprintf(stdout, "Magic cookie: DHCP\n");
+		idx+=4;
+	}
+	int done = 1;
+	while(done){
+		//if DHCP Message Type
+		if(dhcpHeader[idx]==53){
+			if(dhcpHeader[idx+2] == 1){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (Discover)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx+2] == 2){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (Offer)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx+2] == 3){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (Request)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx+2] == 5){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (ACK)\n", dhcpHeader[idx]);
+			}
+			idx++;
+			fprintf(stdout, "Length = %d\n", dhcpHeader[idx]);
+			idx++;
+			if(dhcpHeader[idx] == 1){
+				fprintf(stdout, "DHCP: Discover (%d)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx] == 2){
+			fprintf(stdout, "DHCP: Offer (%d)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx] == 3){
+				fprintf(stdout, "DHCP: Request (%d)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx] == 5){
+				fprintf(stdout, "DHCP: ACK (%d)\n", dhcpHeader[idx]);
+			}
+			idx++;
+		}
+		//Parameter Request List
+		if(dhcpHeader[idx]==55){
+			fprintf(stdout, "Option: (55) Parameter Request List\n");
+			idx++;
+			int prLength = dhcpHeader[idx];
+			for(int i=0;i<prLength;i++){
+				if(dhcpHeader[idx]==1){
+					fprintf(stdout, "Parameter Request List Item: (%d) Subnet Mask\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==121){
+					fprintf(stdout, "Parameter Request List Item: (%d) Classless Static Route\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==3){
+					fprintf(stdout, "Parameter Request List Item: (%d) Router\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==6){
+					fprintf(stdout, "Parameter Request List Item: (%d) Domain Name Server\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==15){
+					fprintf(stdout, "Parameter Request List Item: (%d) Domain Name\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==114){
+					fprintf(stdout, "Parameter Request List Item: (%d) URL [T0D0:RFC3679]\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==119){
+					fprintf(stdout, "Parameter Request List Item: (%d) Domain Search\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==252){
+					fprintf(stdout, "Parameter Request List Item: (%d) Private/Proxy autodiscovery\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==95){
+					fprintf(stdout, "Parameter Request List Item: (%d) LDAP [T0D0:RFC3679]\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==44){
+					fprintf(stdout, "Parameter Request List Item: (%d) NetBIOS over TCP/IP Name Server\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==46){
+					fprintf(stdout, "Parameter Request List Item: (%d) NetBIOS over TCP/IP Node Type\n", dhcpHeader[idx]);
+				}else if(dhcpHeader[idx]==1){
+					fprintf(stdout, "Parameter Request List Item: (%d) Subnet Mask\n", dhcpHeader[idx]);
+				}
+				
+				idx++;
+			}
+		}
+		if(dhcpHeader[idx]==57){
+			fprintf(stdout, "Option: (%d) Maximum DHCP Message Size\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Maximum DHCP Message Size: %d", dhcpHeader[idx]);
+			idx++;			
+		}
+		if(dhcpHeader[idx]==61){
+			fprintf(stdout, "Option: (%d) Client identifier\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d", dhcpHeader[idx]);
+			idx++;
+			if(dhcpHeader[idx+3]==0x69 && dhcpHeader[idx+4]==0x5e && dhcpHeader[idx+5]==0xd5){
+				fprintf(stdout, "Client MAC address: Apple_69:5e:d5 (%02x:%02x:%02x:%02x:%02x:%02x)\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3], dhcpHeader[idx+4], dhcpHeader[idx+5]);
+				idx+=6;
+			}else{
+				fprintf(stdout, "Client MAC address: %02x:%02x:%02x:%02x:%02x:%02x", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3], dhcpHeader[idx+4], dhcpHeader[idx+5]);
+				idx+=6;
+			}
+		}
+		if(dhcpHeader[idx]==50){
+			fprintf(stdout, "Option: (%d) Requested IP Address\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Requested IP Address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+			idx+=4;
+		}
+		if(dhcpHeader[idx]==54){
+			fprintf(stdout, "Option: (%d) DHCP Server Identifier\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "DHCP Server Identifier: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+			idx+=4;
+		}
+		if(dhcpHeader[idx]==12){
+			fprintf(stdout, "Option: (%d) Host Name\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			int hnLen = dhcpHeader[idx];
+			idx++;
+			fprintf(stdout, "Host Name: ");
+			for(int i=0;i<hnLen;i++){
+				fprintf(stdout, "%c", dhcpHeader[idx]);
+				idx++;
+			}
+			fprintf(stdout, "\n");
+		}
+		if(dhcpHeader[idx]==255){
+			fprintf(stdout, "Option: (%d) End\n", dhcpHeader[idx]);
+			done=0;
+		}
+	}
+		
+	
+}
 void Dns_header_fprint(FILE *captureData, unsigned char* Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader, struct tcphdr *tcpHeader, struct sockaddr_in source, struct sockaddr_in dest, int size){
 	
 	
@@ -1024,7 +1259,7 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
 
     // Transactoin Id
     printf("Transaction ID: ");
-    fprintf(captureData, "                Transaction ID       |   0x%02X\n", dnsHeader[idx], dnsHeader[idx+1]);
+    fprintf(captureData, "                Transaction ID       |   0x%02X%02X\n", dnsHeader[idx], dnsHeader[idx+1]);
     fprintf(stdout, " 0x");
     for (idx = 0; idx < 2; idx++) {
         fprintf(stdout, "%02X", (unsigned char)dnsHeader[idx]);
@@ -1124,7 +1359,7 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
     //질의 type
     int type = (unsigned char)dnsHeader[idx];
     printf("Type: ");
-    fprintf(captureData, "                     Type            |   ", arCount);
+    fprintf(captureData, "                     Type            |   ");
     if (type == 1){
         fprintf(stdout, " A %c\n", q);
         fprintf(captureData, "A %c\n", q);
@@ -1205,7 +1440,7 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
         idx += 2;
         if(ansLength == 4){
         	printf("Address ");
-    		fprintf(captureData, "                  Address            |   ", arCount);
+    		fprintf(captureData, "                  Address            |   ");
         	printf("%d.%d.%d.%d\n", dnsHeader[idx], dnsHeader[idx+1], dnsHeader[idx+2], dnsHeader[idx+3]);
         	fprintf(captureData, "%d.%d.%d.%d\n", dnsHeader[idx], dnsHeader[idx+1], dnsHeader[idx+2], dnsHeader[idx+3]);
         	idx+=3;
