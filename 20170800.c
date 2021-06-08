@@ -513,7 +513,6 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
 void https_header_print(FILE *captureData, unsigned char *httpsHeader, int Size){
 	fprintf(captureData, "\n           --------------------------------------------------------\n");
     	fprintf(captureData, "          |                      HTTPS Header                      |\n");
-    	fprintf(captureData, "           --------------------------------------------------------\n");
     	https_header_capture(captureData, httpsHeader, Size);
 }
 void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size){
@@ -522,6 +521,8 @@ void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Siz
 		printf("%02X ", httpsHeader[i]);
 	}
 	printf("\n");
+
+    	fprintf(captureData, "           --------------------------------------------------------\n");
 	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23), Encrypted Alert(21)
 	if(httpsHeader[idx]==20){
 		https_ccs_capture(captureData, httpsHeader, idx);
