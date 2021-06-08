@@ -443,7 +443,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
             if (!body && (body = strstr(response, "\r\n\r\n"))) {
                 *body = 0;
                 body += 4;
-		
+		fprintf(captureData, "\nReceived Headers:\n%s\n", response);
                 printf("\nReceived Headers:\n%s\n", response);
 		
                 q = strstr(response, "\nContent-Length: ");
@@ -463,6 +463,8 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
                     }
                 }
                 if(getMode != 1){
+                
+                fprintf(captureData, "\nReceived Body:\n");
                 printf("\nReceived Body:\n");
                 }
             }else{
@@ -476,6 +478,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
             	if (body) {
 	                if (encoding == length) {
 	                    if (p - body >= remaining && *body>=0x21 && *body<=0x7e) {
+	                        fprintf(captureData, "%.*s", remaining, body);
 	                        printf("%.*s", remaining, body);
                         	break;
 	                    }
@@ -491,6 +494,7 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
 	                            }
 	                        }
                         	if (remaining && p - body >= remaining && *body>=0x21 && *body<=0x7e) {
+	                            fprintf(captureData, "%.*s", remaining, body);
 	                            printf("%.*s", remaining, body);
 	                            body += remaining + 2;
 	                            remaining = 0;
