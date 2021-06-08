@@ -1142,8 +1142,17 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 			if(dhcpHeader[idx+2] == 3){
 				fprintf(stdout, "Option: (%d) DHCP Message Type (Request)\n", dhcpHeader[idx]);
 			}
+			if(dhcpHeader[idx+2] == 4){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (Decline)\n", dhcpHeader[idx]);
+			}
 			if(dhcpHeader[idx+2] == 5){
 				fprintf(stdout, "Option: (%d) DHCP Message Type (ACK)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx+2] == 6){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (NAK)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx+2] == 7){
+				fprintf(stdout, "Option: (%d) DHCP Message Type (Release)\n", dhcpHeader[idx]);
 			}
 			idx++;
 			fprintf(stdout, "Length = %d\n", dhcpHeader[idx]);
@@ -1157,8 +1166,17 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 			if(dhcpHeader[idx] == 3){
 				fprintf(stdout, "DHCP: Request (%d)\n", dhcpHeader[idx]);
 			}
+			if(dhcpHeader[idx] == 4){
+				fprintf(stdout, "DHCP: Decline (%d)\n", dhcpHeader[idx]);
+			}
 			if(dhcpHeader[idx] == 5){
 				fprintf(stdout, "DHCP: ACK (%d)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx] == 6){
+				fprintf(stdout, "DHCP: NAK (%d)\n", dhcpHeader[idx]);
+			}
+			if(dhcpHeader[idx] == 7){
+				fprintf(stdout, "DHCP: Release (%d)\n", dhcpHeader[idx]);
 			}
 			idx++;
 		}
