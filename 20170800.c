@@ -722,7 +722,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		fprintf(captureData, "             Handshake Type          |   Server Hello\n");
 		idx++;
 		fprintf(stdout, "First Ten Session Ticket: ");
-		fprintf(captureData, "             First Ten Session Ticket|   ");
+		fprintf(captureData, "         First Ten Session Ticket    |   ");
 		if(ticketLen>10){
 			for(int i=0;i<10;i++){
 				fprintf(stdout, "%02x", httpsHeader[idx]);
@@ -811,6 +811,8 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			fprintf(stdout, "%02x", httpsHeader[idx]);
 			idx++;
 		}
+		fprintf(captureData, "\n");
+		fprintf(stdout, "\n");
 		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
@@ -825,54 +827,71 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 	hSLength += httpsHeader[idx]*16*16;
 	idx++;
 	hSLength += httpsHeader[idx];
+	fprintf(captureData, "         Handshake Length            |   %d\n", hSLength);
+	fprintf(captureData, "             Version                 |   ");
 	fprintf(stdout, "Handshake Length: %d\n", hSLength);
 	idx+=2;
 	if(httpsHeader[idx]==1){
+		fprintf(captureData, "TLS 1.0\n");
 		fprintf(stdout, "Version: TLS 1.0\n");
 	}
 	if(httpsHeader[idx]==2){
+		fprintf(captureData, "TLS 1.1\n");
 		fprintf(stdout, "Version: TLS 1.1\n");		
 	}
 	if(httpsHeader[idx]==3){
+		fprintf(captureData, "TLS 1.2\n");
 		fprintf(stdout, "Version: TLS 1.2\n");
 	}
 	idx++;
+	fprintf(captureData, "           Random Value              |   ");
 	fprintf(stdout, "Random value: ");
 	for(int i=0;i<32;i++){
+		fprintf(captureData, "%02x", httpsHeader[idx+i]);
 		fprintf(stdout, "%02x", httpsHeader[idx+i]);
 	}
+	fprintf(captureData, "\n");
 	fprintf(stdout, "\n");
 	idx+=32;
+	fprintf(captureData, "          Session Length             |   %d\n", httpsHeader[idx]);
 	fprintf(stdout, "Session Length: %d\n", httpsHeader[idx]);
 	int sesLength = httpsHeader[idx];
 	idx++;
 	if(sesLength>0){
-		fprintf(stdout, "Session ID: ");
+		fprintf(stdout, "Session ID: ");	
+		fprintf(captureData, "            Session ID               |   ");
 		for(int i=0;i<sesLength;i++){
+			fprintf(captureData, "%02x", httpsHeader[idx]);
 			fprintf(stdout, "%02x", httpsHeader[idx]);
 			idx++;
 		}
+		fprintf(captureData, "\n");
 		fprintf(stdout, "\n");
 	}
 	//sleep(1);
 	if(server == 1){
 		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x01){
+			fprintf(captureData, "           Cipher Suite              |   TLS_AES_128_GDM_SHA256\n");
 			fprintf(stdout, "Cipher Suite: TLS_AES_128_GCM_SHA256\n");
 		}
 		if(httpsHeader[idx] == 0x13 && httpsHeader[idx+1] == 0x02){
+			fprintf(captureData, "           Cipher Suite              |   TLS_AES_256_GCM_SHA384\n");
 			fprintf(stdout, "Cipher Suite: TLS_AES_256_GCM_SHA384\n");
 		}
 		idx+=2;
 		if(httpsHeader[idx] != 0){
+			fprintf(captureData, "        Compression Method           |   %d\n", httpsHeader[idx]);
 			printf("Compression Method: %d\n", httpsHeader[idx]);
 		}
 		if(httpsHeader[idx] == 0){
+			fprintf(captureData, "        Compression Method           |   (null)\n");
 			printf("Compression Method: (null)\n");
 		}
 		idx++;
 		extLength = httpsHeader[idx]*16*16;
 		idx++;
 		extLength+=httpsHeader[idx];
+		fprintf(captureData, "        Extensions Length            |   %d\n", extLength);
 		fprintf(stdout, "Extensions Length: %d\n", extLength);
 			
 		/*
@@ -884,63 +903,216 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			fprintf(stdout,"Supported Version: TLS 1.3\n");
 		}
 		*/
-		idx+=2;
-		if(httpsHeader[idx]==51){
-			fprintf(stdout,"Type: Key share\n");
+		idx++;
+		int typeLen;
+		//extension 계속 뽑아먹기.
+		while(extLength>0){
+			fprintf(captureData, "\n");
+			typeLen=httpsHeader[idx]*256;
+			idx++;
+			typeLen+=httpsHeader[idx];
+			if(typeLen==51){
+				fprintf(captureData, "              Type                   |   Key share(%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: Key share\n");
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx+=2;
+				
+				fprintf(stdout, "Key share Entry\n");
+				fprintf(captureData, "          Key Share Entry\n");
+				if(httpsHeader[idx]==0x1d){
+					fprintf(stdout, "Group: x25519\n");
+					fprintf(captureData, "              Group                  |   x25519\n");
+				}
+				idx+=2;
+				fprintf(captureData, "             Length                  |   %d\n", httpsHeader[idx]);
+				int keLen2 = httpsHeader[idx];
+				idx++;
+				fprintf(captureData, "          Key Exchange               |   ", httpsHeader[idx]);
+				for(int i=0;i<keLen2;i++){
+					fprintf(captureData, "%02x", httpsHeader[idx]);
+					idx++;
+				}
+				
+				
+			}
+			if(typeLen==43){
+				fprintf(captureData, "              Type                   |   supported_versions (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: supported_versions (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx+=2;
+				fprintf(captureData, "        Supported Versions           |   ");
+				if(httpsHeader[idx]==2){
+					fprintf(captureData, "TLS 1.1\n");
+					fprintf(stdout, "Supported Version: TLS 1.1\n");
+				}
+				if(httpsHeader[idx]==3){
+					fprintf(captureData, "TLS 1.2\n");
+					fprintf(stdout, "Supported Version: TLS 1.2\n");
+				}
+				if(httpsHeader[idx]==4){
+					fprintf(captureData, "TLS 1.2\n");
+					fprintf(stdout, "Supported Version: TLS 1.2\n");
+				}
+				idx++;
+			}
+			if(typeLen==65281){
+				fprintf(captureData, "              Type                   |   renegotiation_info (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: renegotiation_info (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx++;
+				fprintf(captureData, " Renegotiation info extension length |   %d\n", httpsHeader[idx]);
+				idx++;
+			}
+			if(typeLen==0){
+				fprintf(captureData, "              Type                   |   server_name (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: server_name (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx++;
+			}
+			if(typeLen==11){
+				fprintf(captureData, "              Type                   |   ec_point_formats (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: ec_point_formats (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx++;
+				fprintf(captureData, "     EC point formats Length         |   %d\n", httpsHeader[idx]);
+				int ecpfLen=httpsHeader[idx];
+				idx++;
+				for(int i=0;i<ecpfLen;i++){
+					fprintf(captureData, "         EC point format             |   ");
+					if(httpsHeader[idx]==0){
+						fprintf(captureData, "uncompressed (%d)", httpsHeader[idx]);
+						idx++;
+					}
+					if(httpsHeader[idx]==1){
+						fprintf(captureData, "ansiX962_compressed_prime (%d)", httpsHeader[idx]);
+						idx++;
+					}
+					if(httpsHeader[idx]==2){
+						fprintf(captureData, "ansiX962_compressed_char2 (%d)", httpsHeader[idx]);
+						idx++;
+					}
+					else{
+						fprintf(captureData, "UnKnown_not_settled (%d)", httpsHeader[idx]);
+						idx++;
+					}
+				}
+			}
+			if(typeLen==35){
+				fprintf(captureData, "              Type                   |   session_ticket (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: session_ticket (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				for(int i=0;i<klen;i++){
+					idx++;
+				}
+				idx++;
+			}
+			if(typeLen==16){
+				fprintf(captureData, "              Type                   |   application_layer_protocol_negotiation (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: application_layer_protocol_negotiation (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLength-=klen;
+				idx+=2;
+				fprintf(captureData, "      ALPN Extension Length          |   %d\n", httpsHeader[idx]);
+				idx++;
+				int alpnLen = httpsHeader[idx];
+				fprintf(captureData, "        ALPN Next Protocol           |   ");
+				for(int i=0;i<alpnLen;i++){
+					fprintf(captureData, "%c", httpsHeader[idx]);
+					idx++;
+				}
+				fprintf(captureData, "\n");
+			}
+			extLength-=4;
 		}
-		idx++;
-		int klen=httpsHeader[idx]*16*16;
-		idx++;
-		klen+=httpsHeader[idx];
-		fprintf(stdout, "Length: %d\n", klen);
-		idx+=2;
-		if(httpsHeader[idx]==0x1d){
-			fprintf(stdout, "Group: x25519\n");
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+			https_header_capture(captureData, httpsHeader+idx, idx);
+			return;
+		}else{
+			return;
 		}
-		idx++;
-		int keLen = httpsHeader[idx]*16*16;
-		idx++;
-		keLen += httpsHeader[idx];
-		fprintf(stdout, "Key Exchange Length: %d\n", keLen);
-		idx++;
-		fprintf(stdout, "Key Exchange: ");
-		for(int i=0;i<32;i++){
-			fprintf(stdout, "%02x", httpsHeader[idx+i]);
-		}
-		fprintf(stdout, "\n");
-		idx++;
 	}
 	if(server == 0){
 		int csLen = httpsHeader[idx]*16*16;
 		idx++;
 		csLen += httpsHeader[idx];
+		fprintf(captureData, "        Cipher Suite Length          |   %d\n", csLen);
 		fprintf(stdout, "Cipher Suite Length: %d\n", csLen);
 		idx+=csLen;
 		idx++;
+		fprintf(captureData, "     Compression Method Length       |   %d\n", httpsHeader[idx]);
 		fprintf(stdout, "Compression Methods Length: %d\n", httpsHeader[idx]);
 		idx++;
+		fprintf(captureData, "        Compression Methods          |   %d\n", httpsHeader[idx]);
 		fprintf(stdout, "Compression Methods: %d\n", httpsHeader[idx]);
 		idx++;
 		int extLen = httpsHeader[idx]*16*16;
 		idx++;
 		extLen+=httpsHeader[idx];
+		fprintf(captureData, "          Extension Length           |   %d\n", extLen);
 		fprintf(stdout, "Extension Length: %d\n", extLen);
 		idx+=2;
 		if(httpsHeader[idx]==0){
+			fprintf(captureData, "                Type                 |   server_name\n");
 			fprintf(stdout, "Type: server_name\n");
 		}
 		idx++;
 		int extLen2 = httpsHeader[idx]*16*16;
 		idx++;
 		extLen2+=httpsHeader[idx];
+		fprintf(captureData, "             Length                  |   %d\n", extLen2);
 		fprintf(stdout, "Length: %d\n", extLen2);
 		idx++;
+		fprintf(captureData, "          Server Name                |   ");
 		fprintf(stdout, "Server Name: ");
-		for(int k=0;k<extLen2;k++){
+		idx+=5;
+		for(int k=0;k<extLen2-5;k++){
+			fprintf(captureData, "%c", httpsHeader[idx]);
 			fprintf(stdout, "%c", httpsHeader[idx]);
 			idx++;
 		}
-		
+		fprintf(captureData, "\n");
+		fprintf(stdout, "\n");
 		
 		
 	}
