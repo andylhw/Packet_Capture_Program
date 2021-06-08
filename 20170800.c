@@ -915,6 +915,10 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			idx++;
 			typeLen+=httpsHeader[idx];
 			if(typeLen==51){
+				//for DEBUG
+				for(int i=0;i<10;i++){
+					fprintf(captureData, "%02x ", httpsHeader[idx+i]);
+				}
 				fprintf(captureData, "              Type                   |   Key share(%d)\n", httpsHeader[idx]);
 				fprintf(stdout,"Type: Key share\n");
 				idx++;
@@ -925,29 +929,33 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 				fprintf(stdout, "Length: %d\n", klen);
 				extLength-=klen;
 				idx+=2;
-				
-				fprintf(stdout, "Key share Entry\n");
-				fprintf(captureData, "          Key Share Entry\n");
-				if(httpsHeader[idx]==0x1d){
-					fprintf(stdout, "Group: x25519\n");
-					fprintf(captureData, "              Group                  |   x25519 (%d)\n", httpsHeader[idx]);
-				}
-				if(httpsHeader[idx]==23){
-					fprintf(stdout, "Group: secp256r1 (%d) \n", httpsHeader[idx]);
-					fprintf(captureData, "              Group                  |   secp256r1 (%d)\n", httpsHeader[idx]);
-				}
-				idx+=2;
-				fprintf(captureData, "       Key Exchange Length           |   %d\n", httpsHeader[idx]);
-				int keLen2 = httpsHeader[idx];
-				idx++;
-				fprintf(captureData, "     First Ten Key Exchange          |   ");
-				for(int i=0;i<10;i++){
-					fprintf(captureData, "%02x", httpsHeader[idx]);
+				if(klen == 2){
+					if(httpsHeader[idx]==23){
+						fprintf(captureData, "         Selected Group              |   secp256r1 (%d)\n", httpsHeader[idx]);
+					}
+				}else{
+					fprintf(stdout, "Key share Entry\n");
+					fprintf(captureData, "          Key Share Entry\n");
+					if(httpsHeader[idx]==0x1d){
+						fprintf(stdout, "Group: x25519\n");
+						fprintf(captureData, "              Group                  |   x25519 (%d)\n", httpsHeader[idx]);
+					}
+					if(httpsHeader[idx]==23){
+						fprintf(stdout, "Group: secp256r1 (%d) \n", httpsHeader[idx]);
+						fprintf(captureData, "              Group                  |   secp256r1 (%d)\n", httpsHeader[idx]);
+					}
+					idx+=2;
+					fprintf(captureData, "       Key Exchange Length           |   %d\n", httpsHeader[idx]);
+					int keLen2 = httpsHeader[idx];
 					idx++;
+					fprintf(captureData, "     First Ten Key Exchange          |   ");
+					for(int i=0;i<10;i++){
+						fprintf(captureData, "%02x", httpsHeader[idx]);
+						idx++;
+					}
+					fprintf(captureData, "\n");
+					idx+=keLen2-10;
 				}
-				fprintf(captureData, "\n");
-				idx+=keLen2-10;
-				
 				
 			}
 			if(typeLen==43){
@@ -957,14 +965,12 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 				int klen=httpsHeader[idx]*16*16;
 				idx++;
 				klen+=httpsHeader[idx];
+
 				fprintf(captureData, "             Length                  |   %d\n", klen);
 				fprintf(stdout, "Length: %d\n", klen);
 				extLength-=klen;
-				idx++;
-				fprintf(captureData, "     Supported Version Length        |   %d\n", httpsHeader[idx]);
-				int svLen = httpsHeader[idx];
-				
-				for(int i=0;i<svLen/2;i++){
+				for(int i=0;i<klen/2;i++){
+					idx+=2;
 					fprintf(captureData, "        Supported Versions           |   ");
 					
 					if(httpsHeader[idx]==2){
@@ -979,8 +985,8 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 						fprintf(captureData, "TLS 1.3\n");
 						fprintf(stdout, "Supported Version: TLS 1.3 (0x03%02x\n", httpsHeader[idx]);
 					}
-					idx++;
 				}
+				idx++;
 				
 			}
 			if(typeLen==65281){
