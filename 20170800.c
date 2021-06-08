@@ -1053,7 +1053,7 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 	}
 	idx++;
 	if(dhcpHeader[idx] == 1){
-		fprintf(captureData, "Boot Reply (%d)\n", dhcpHeader[idx]);
+		fprintf(captureData, "Hardware Type: Ethernet(0x%02x)\n", dhcpHeader[idx]);
 		fprintf(stdout, "Hardware Type: Ethernet (0x%02x)\n", dhcpHeader[idx]);
 	}
 	idx++;
