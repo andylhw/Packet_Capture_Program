@@ -1118,9 +1118,11 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			idx++;
 			typeLen += httpsHeader[idx];
 			//DEBUG
+			/*
 			for(int i=0;i<10;i++){
 				fprintf(captureData, "%02x ", httpsHeader[idx+i]);
 			}
+			*/
 			if(typeLen==0){
 				fprintf(captureData, "              Type                   |   server_name (%d)\n", httpsHeader[idx]);
 				fprintf(stdout, "Type: server_name\n");
@@ -1431,9 +1433,9 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			else {
 				extensionCount++;
 			}
-			//for DEBUG
 			extLen-=4;
-			fprintf(captureData, "extLen Remaining: %d\n", extLen);
+			//for DEBUG
+			//fprintf(captureData, "extLen Remaining: %d\n", extLen);
 		}
 		
 		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
