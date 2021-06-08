@@ -917,9 +917,11 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			typeLen+=httpsHeader[idx];
 			if(typeLen==51){
 				//for DEBUG
+				/*
 				for(int i=0;i<10;i++){
 					fprintf(captureData, "%02x ", httpsHeader[idx+i]);
 				}
+				*/
 				fprintf(captureData, "              Type                   |   Key share(%d)\n", httpsHeader[idx]);
 				fprintf(stdout,"Type: Key share\n");
 				idx++;
@@ -1484,11 +1486,15 @@ void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             }
             //if Port Number is DHCP(67)
             else if(ntohs(udpHeader->source) == 67){
+    		fprintf(captureData, "\n############################## DHCP Packet #####################################\n");
+            	Udp_header_fprint(captureData, Buffer, etherHeader, ipHeader, udpHeader, source, dest, Size);
             	fprintf(stdout, "%d %s:dns > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr));
                 fprintf(stdout, "%s:%u = UDP ", inet_ntoa(dest.sin_addr), ntohs(udpHeader->dest));
                 dhcp_header_fprint(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, Size);
             }
             else if(ntohs(udpHeader->dest) == 67){
+    		fprintf(captureData, "\n############################## DHCP Packet #####################################\n");
+            	Udp_header_fprint(captureData, Buffer, etherHeader, ipHeader, udpHeader, source, dest, Size);
             	fprintf(stdout, "%d %s:%u > ", (unsigned int)ipHeader->version, inet_ntoa(source.sin_addr), ntohs(udpHeader->source));
                 fprintf(stdout, "%s:DHCP = UDP ", inet_ntoa(dest.sin_addr));
                 dhcp_header_fprint(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + sizeof udpHeader, Size);
@@ -1531,7 +1537,6 @@ void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
 }
 void Udp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader,
                        struct udphdr *udpHeader, struct sockaddr_in source, struct sockaddr_in dest, int Size) {
-    fprintf(captureData, "\n############################## UDP Packet #####################################\n");
     Ethrenet_header_fprint(captureData, etherHeader);       // ethernet 정보 print
     Ip_header_fprint(captureData, ipHeader, source, dest);  // ip 정보 print
     fprintf(captureData, "\n           --------------------------------------------------------\n");
@@ -1552,8 +1557,9 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 	int idx = 0;
 	fprintf(stdout, "\n");
 	fprintf(captureData, "\n           --------------------------------------------------------\n");
-	fprintf(captureData, "           |                    DHCP Header                       |\n");
+	fprintf(captureData, "           |                    DHCP Packet                       |\n");
 	fprintf(captureData, "           --------------------------------------------------------\n");
+	fprintf(captureData, "                Message Type         |   ");
 	fprintf(stdout, "Message Type: ");
     	
 	if(dhcpHeader[idx] == 1){
@@ -1566,7 +1572,7 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 	}
 	idx++;
 	if(dhcpHeader[idx] == 1){
-		fprintf(captureData, "Hardware Type: Ethernet(0x%02x)\n", dhcpHeader[idx]);
+		fprintf(captureData, "               Hardware Type         |   Ethernet(0x%02x)\n", dhcpHeader[idx]);
 		fprintf(stdout, "Hardware Type: Ethernet (0x%02x)\n", dhcpHeader[idx]);
 	}
 	idx++;
@@ -1576,7 +1582,7 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 	fprintf(captureData, "                    Hops             |   %d\n", dhcpHeader[idx]);
 	fprintf(stdout, "Hops: %d\n", dhcpHeader[idx]);
 	idx++;
-	fprintf(captureData, "               Transaction ID        |   %02x%02x%02x%02x\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
+	fprintf(captureData, "               Transaction ID        |   0x%02x%02x%02x%02x\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
 	fprintf(stdout, "Transaction ID: %02x%02x%02x%02x\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
 	idx+=4;
 	int secelap = dhcpHeader[idx]*256;
@@ -1649,7 +1655,7 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 		fprintf(stdout, "Boot file name: ");
 		for(int i=0;i<128;i++){
 			if(dhcpHeader[idx]>=0x20 && dhcpHeader[idx]<=0x7e){
-				fprintf(stdout, "%c", dhcpHeader[idx]);	
+				fprintf(stdout, "%c", dhcpHeader[idx]);
 				fprintf(captureData, "%c", dhcpHeader[idx]);			
 			}
 			idx++;
@@ -1977,6 +1983,24 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 			}
 			fprintf(captureData, "\n");
 			fprintf(stdout, "\n");
+			
+		}else if(dhcpHeader[idx]==51){
+			fprintf(captureData, "(%d) IP Address Lease Time\n", dhcpHeader[idx]);
+			fprintf(stdout, "Option: (%d) IP Address Lease Time\n", dhcpHeader[idx]);
+			idx++;
+			fprintf(captureData, "                   Length            |   %d\n", dhcpHeader[idx]);
+			fprintf(stdout, "Length: %d\n", dhcpHeader[idx]);
+			int dnLength = dhcpHeader[idx];
+			idx++;
+			int ipltLen = dhcpHeader[idx]*16777216;
+			idx++;
+			ipltLen += dhcpHeader[idx]*65536;
+			idx++;
+			ipltLen += dhcpHeader[idx]*256;
+			idx++;
+			ipltLen += dhcpHeader[idx];
+			fprintf(captureData, "          IP Address Lease Time      |   %d\n", ipltLen);
+			idx++;
 			
 		}else{
 			fprintf(captureData, "(%d) Not Pre-coded type\n", dhcpHeader[idx]);
