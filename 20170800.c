@@ -1038,6 +1038,7 @@ void Udp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *
 void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 	int idx = 0;
 	fprintf(stdout, "\n");
+	fprintf(stdout, "Message Type: ");
 	if(dhcpHeader[idx] == 1){
 		fprintf(stdout, "Boot Request (%d)\n", dhcpHeader[idx]);
 	}
