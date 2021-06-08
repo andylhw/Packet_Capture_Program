@@ -577,6 +577,7 @@ void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int id
 	idx++;
 	appLength+=httpsHeader[idx];
 	fprintf(captureData, "             Length                  |   %d\n", appLength);
+	idx++;
 	fprintf(captureData, "             First Ten Enc  AppData  |   ");
 	fprintf(stdout, "Length: %d\n", appLength);
 	fprintf(stdout, "First Ten Encrypted Application Data: ");
