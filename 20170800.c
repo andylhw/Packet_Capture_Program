@@ -1121,17 +1121,19 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		int typeLen;
 		int extensionCount = 0;
 		while(extLen>0){
+			//DEBUG
+			
+			for(int i=0;i<10;i++){
+				fprintf(captureData, "%02x ", httpsHeader[idx+i]);
+			}
+			
 			extensionCount++;
 			fprintf(captureData, "Extension #%d\n", extensionCount);
 			typeLen = httpsHeader[idx]*256;
 			idx++;
 			typeLen += httpsHeader[idx];
-			//DEBUG
-			/*
-			for(int i=0;i<10;i++){
-				fprintf(captureData, "%02x ", httpsHeader[idx+i]);
-			}
-			*/
+			
+			
 			if(typeLen==0){
 				fprintf(captureData, "              Type                   |   server_name (%d)\n", httpsHeader[idx]);
 				fprintf(stdout, "Type: server_name\n");
@@ -1236,7 +1238,6 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 					}
 					idx++;
 				}
-				
 			}
 			else if(typeLen==35){
 				fprintf(captureData, "              Type                   |   session_ticket (%d)\n", httpsHeader[idx]);
@@ -1251,6 +1252,20 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 				for(int i=0;i<klen;i++){
 					idx++;
 				}
+				idx++;
+			}
+			else if(typeLen==65281){
+				fprintf(captureData, "              Type                   |   renegotiation_info (%d)\n", httpsHeader[idx]);
+				fprintf(stdout,"Type: renegotiation_info (%d)\n", httpsHeader[idx]);
+				idx++;
+				int klen=httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				fprintf(stdout, "Length: %d\n", klen);
+				extLen-=klen;
+				idx++;
+				fprintf(captureData, " Renegotiation info extension length |   %d\n", httpsHeader[idx]);
 				idx++;
 			}
 			else if(typeLen==22){
@@ -1279,11 +1294,12 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 				fprintf(stdout, "Length: %d\n", klen);
 				extLen-=klen;
 				if(klen!=0){
-				for(int i=0;i<klen;i++){
-					idx++;
-				}
+					for(int i=0;i<klen;i++){
+						idx++;
+					}
 				}
 				idx++;
+				
 			}
 			else if(typeLen==13){
 				fprintf(captureData, "              Type                   |   signature_algorithms (%d)\n", typeLen);
@@ -1440,11 +1456,28 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 				idx+=keLen1-10;
 			}
 			else {
-				extensionCount++;
+			//DEBUG
+			/*
+			for(int i=-1;i<9;i++){
+				fprintf(captureData, "%02x ", httpsHeader[idx+i]);
+			}
+			*/
+				fprintf(captureData, "              Type                   |   Unknown Type (%d)\n", typeLen);
+				idx++;
+				int klen = httpsHeader[idx]*16*16;
+				idx++;
+				klen+=httpsHeader[idx];
+				fprintf(captureData, "             Length                  |   %d\n", klen);
+				extLen-=klen;
+				idx++;
+				for(int i=0;i<klen;i++){
+					idx++;
+				}
+				
 			}
 			extLen-=4;
 			//for DEBUG
-			//fprintf(captureData, "extLen Remaining: %d\n", extLen);
+			fprintf(captureData, "extLen Remaining: %d\n", extLen);
 		}
 		
 		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
