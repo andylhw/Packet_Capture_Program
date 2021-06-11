@@ -67,8 +67,7 @@ void Tcp_header_capture(FILE *captureFile, struct ethhdr *, struct iphdr *, unsi
 void Tcp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct tcphdr *, struct sockaddr_in, struct sockaddr_in,
                        int);                                                                        // tcp 헤더 정보 fprint
 void Udp_header_capture(FILE *captureFile, struct ethhdr *, struct iphdr *, unsigned char *, int);  // udp 헤더 정보 capture
-void Udp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct udphdr *, struct sockaddr_in, struct sockaddr_in,
-                       int);  // udp 헤더 정보 fprint
+void Udp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct udphdr *, struct sockaddr_in, struct sockaddr_in, int Size);  // udp 헤더 정보 fprint
 void Dns_header_frpint();
                                           // icmp 헤더 정보 fprint
 void Change_hex_to_ascii(FILE *captureFile, unsigned char *, int, int);  // payload값 hex/ascii/file option에 맞게 출력
@@ -139,7 +138,7 @@ void Capture_helper(FILE *captureData, unsigned char *buffer, int size) {
     char *Ptr = (char*)&etherHeader->h_proto;
     //ARP DETECTION. ARP == 0806 
     if (*Ptr == 8 && *(Ptr+1)==6){
-    	printf("ARP HEADER DETECTED\n\n");\
+  	//printf("ARP HEADER DETECTED\n\n");
     	ARP_header_capture(captureData, etherHeader, arpHeader, buffer, size);
     }
     else if (etherHeader->h_proto == 8) {
@@ -373,12 +372,14 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
             
             Tcp_header_fprint(captureData, Buffer, etherHeader, ipHeader, tcpHeader, source, dest, Size);
             if(ntohs(tcpHeader->source) == http || ntohs(tcpHeader->dest) == http){
-            	printf("\nHTTP DETECTED\n");
+            	//DEBUG
+            	//printf("\nHTTP DETECTED\n");
             	http_header_capture(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
             }
             //https 출력
             if(ntohs(tcpHeader->source) == https || ntohs(tcpHeader->dest) == https){
-            	printf("\nHTTPS DETECTED\n");
+            	//DEBUG
+            	//printf("\nHTTPS DETECTED\n");
             	https_header_print(captureData, Buffer + ETH_HLEN + (ipHeader->ihl * 4) + 20, Size);
             }
             /*file 출력*/
@@ -517,11 +518,14 @@ void https_header_print(FILE *captureData, unsigned char *httpsHeader, int Size)
 }
 void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size){
 	int idx = 0;
+	//for DEBUG
+	/*
 	for(int i=0;i<10;i++){
 		printf("%02X ", httpsHeader[i]);
 	}
+	
 	printf("\n");
-
+	*/
     	fprintf(captureData, "           --------------------------------------------------------\n");
 	//Content Type: Handshake(22), ChangeCipherSpec(20), ApplicationData(23), Encrypted Alert(21)
 	if(httpsHeader[idx]==20){
@@ -605,7 +609,7 @@ void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int id
 	//DEBUG
 	//fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
 	
-	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 		https_header_capture(captureData, httpsHeader+idx, idx);
 		return;
 	}else{
@@ -642,7 +646,7 @@ void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx){
 	fprintf(stdout, "Change Cipher Spec Message\n");
 	idx++;
 	fprintf(stdout, "next: %02x\n", httpsHeader[idx]);
-	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+	if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 		https_header_capture(captureData, httpsHeader+idx, idx);
 		return;
 	}else{
@@ -746,7 +750,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		
 		//DEBUG
 		//fprintf(stdout, "Next: %02x\n", httpsHeader[idx]);
-		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
 		}else{
@@ -768,7 +772,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		fprintf(stdout, "Certificate Length: %d\n", cerLen);
 		fprintf(captureData, "             Certificate Length      |   %d\n", cerLen);
 		idx+=cerLen+1;
-		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
 		}else{
@@ -814,7 +818,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		}
 		fprintf(captureData, "\n");
 		fprintf(stdout, "\n");
-		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
 		}else{
@@ -1090,7 +1094,7 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			}
 			extLength-=4;
 		}
-		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20||httpsHeader[idx]==21){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
 		}else{
@@ -1122,11 +1126,11 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 		int extensionCount = 0;
 		while(extLen>0){
 			//DEBUG
-			
+			/*
 			for(int i=0;i<10;i++){
 				fprintf(captureData, "%02x ", httpsHeader[idx+i]);
 			}
-			
+			*/
 			extensionCount++;
 			fprintf(captureData, "Extension #%d\n", extensionCount);
 			typeLen = httpsHeader[idx]*256;
@@ -1477,10 +1481,10 @@ void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int 
 			}
 			extLen-=4;
 			//for DEBUG
-			fprintf(captureData, "extLen Remaining: %d\n", extLen);
+			//fprintf(captureData, "extLen Remaining: %d\n", extLen);
 		}
 		
-		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20){ 
+		if(httpsHeader[idx]==23 || httpsHeader[idx]==22 || httpsHeader[idx]==20 || httpsHeader[idx]==21){ 
 			https_header_capture(captureData, httpsHeader+idx, idx);
 			return;
 		}else{
@@ -1854,9 +1858,6 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 				}else if(dhcpHeader[idx]==249){
 					fprintf(captureData, "(%d) Private/Classless Static Route(Microsoft)\n", dhcpHeader[idx]);
 					fprintf(stdout, "Parameter Request List Item: (%d) Private/Classless Static Route(Microsoft)\n", dhcpHeader[idx]);
-				}else if(dhcpHeader[idx]==252){
-					fprintf(captureData, "(%d) Private/Proxy autodiscovery\n", dhcpHeader[idx]);
-					fprintf(stdout, "Parameter Request List Item: (%d) Private/Proxy autodiscovery\n", dhcpHeader[idx]);
 				}else if(dhcpHeader[idx]==17){
 					fprintf(captureData, "(%d) Root Path\n", dhcpHeader[idx]);
 					fprintf(stdout, "Parameter Request List Item: (%d) Root Path\n", dhcpHeader[idx]);
