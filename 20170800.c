@@ -471,7 +471,10 @@ void http_header_capture(FILE *captureData, unsigned char *response, int Size){
             }else{
             //if not GET -> Get은 요청이니까 제외
 	    		if(getMode != 1){
-            			printf("%s", body);
+	    		if(body){
+	    			fprintf(captureData, "%s", body);
+	    		}
+	    		printf("%s", body);
             		}
             		break;
             }
@@ -1632,6 +1635,11 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size){
 		fprintf(captureData, "                 Bootp flags         |   0x0000 (Unicast)\n");
 		fprintf(stdout, "Bootp flags: 0x0000 (Unicast)\n");
 	}
+	if(dhcpHeader[idx]==0x80 && dhcpHeader[idx+1]==0){
+		fprintf(captureData, "                 Bootp flags         |   0x8000 (Broadcast)\n");
+		fprintf(stdout, "Bootp flags: 0x0000 (Unicast)\n");
+	
+	}
 	idx+=2;
 	fprintf(captureData, "              Client IP Address      |   %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
 	fprintf(stdout, "Client IP address: %d.%d.%d.%d\n", dhcpHeader[idx], dhcpHeader[idx+1], dhcpHeader[idx+2], dhcpHeader[idx+3]);
@@ -2265,6 +2273,7 @@ void Dns_header_frpint(FILE *captureData, unsigned char *dnsHeader, int Size) {
         else if (ansLength == 16) {
                 /* AAAA Record */
                 printf("Address ");
+    		fprintf(captureData, "                  Address            |   ");
                 int j;
                 for (j = 0; j < ansLength; j+=2) {
                
