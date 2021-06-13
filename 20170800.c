@@ -61,7 +61,7 @@ void *PacketCapture_thread(void *arg);  //캡쳐 스레드
 void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size);
 void Arp_header_print(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size);
 void Capture_helper(FILE *captureFile, unsigned char *, int);                                       //캡쳐한 패킷 프로토콜 분류
-void Ethernet_header_fprint(FILE *captureFile, struct iphdr *);                                     // Ethernet 헤더 정보 fprint
+void Ethernet_header_fprint(FILE *captureFile, struct ethhdr *etherHeader);                         // Ethernet 헤더 정보 fprint
 void Ip_header_fprint(FILE *captureFile, struct iphdr *, struct sockaddr_in, struct sockaddr_in);   // ip 헤더 정보 fprint
 void Tcp_header_capture(FILE *captureFile, struct ethhdr *, struct iphdr *, unsigned char *, int);  // tcp 헤더 정보 capture
 void Tcp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct tcphdr *, struct sockaddr_in, struct sockaddr_in,
@@ -159,7 +159,7 @@ void Capture_helper(FILE *captureData, unsigned char *buffer, int size) {
         }
     }
 }
-void Ethrenet_header_fprint(FILE *captureData, struct ethhdr *etherHeader) {
+void Ethernet_header_fprint(FILE *captureData, struct ethhdr *etherHeader) {
     filter++;  // filter 거쳐 캡쳐한 패킷은 이 함수는 무조건 한번씩 거치기 때문에 filter 패킷 값 증가
     fprintf(captureData, "\n           --------------------------------------------------------\n");
     fprintf(captureData, "          |                     Ethernet Header                    |\n");
@@ -280,7 +280,7 @@ void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ar
 }
 void Arp_header_print(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size){
 fprintf(captureData, "\n############################## ARP Packet #####################################\n");
-	Ethrenet_header_fprint(captureData, etherHeader);
+	Ethernet_header_fprint(captureData, etherHeader);
 	fprintf(captureData, "\n           --------------------------------------------------------\n");
     	fprintf(captureData, "          |                       ARP Packet                       |\n");
 	fprintf(captureData, "           --------------------------------------------------------\n");
@@ -389,7 +389,7 @@ void Tcp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
 }
 void Tcp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader, struct tcphdr *tcpHeader, struct sockaddr_in source, struct sockaddr_in dest, int Size) {
     fprintf(captureData, "\n############################## TCP Packet #####################################\n");
-    Ethrenet_header_fprint(captureData, etherHeader);       // ethernet 정보 fprint
+    Ethernet_header_fprint(captureData, etherHeader);       // ethernet 정보 fprint
     Ip_header_fprint(captureData, ipHeader, source, dest);  // ip 정보 fprint
 
     fprintf(captureData, "\n           --------------------------------------------------------\n");
@@ -1577,7 +1577,7 @@ void Udp_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct ip
 }
 void Udp_header_fprint(FILE *captureData, unsigned char *Buffer, struct ethhdr *etherHeader, struct iphdr *ipHeader,
                        struct udphdr *udpHeader, struct sockaddr_in source, struct sockaddr_in dest, int Size) {
-    Ethrenet_header_fprint(captureData, etherHeader);       // ethernet 정보 print
+    Ethernet_header_fprint(captureData, etherHeader);       // ethernet 정보 print
     Ip_header_fprint(captureData, ipHeader, source, dest);  // ip 정보 print
     fprintf(captureData, "\n           --------------------------------------------------------\n");
     fprintf(captureData, "          |                       UDP Header                       |\n");
