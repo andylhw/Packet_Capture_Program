@@ -2397,8 +2397,8 @@ void MenuBoard() {
 void StartMenuBoard() {
     system("clear");
     fprintf(stdout, "\n****************************** Options ****************************\n\n");
-    fprintf(stdout, "   \033[mprotocol\033[0m : *(all)(ARP) | tcp(http/https) | udp(DNS) \n");
-    fprintf(stdout, "   \033[mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443)]  \n");
+    fprintf(stdout, "   \033[mprotocol\033[0m : *(all)(ARP - 모든경우 잡힘) | tcp(http/https) | udp(DNS/DHCP) \n");
+    fprintf(stdout, "   \033[mport\033[0m     :  *(all) | 0 ~ 65535 | [http(80) | dns(53) | https(443) | DHCP(67)]  \n");
     fprintf(stdout, "   \033[mip\033[0m       :      *(all) | 0.0.0.0 ~ 255.255.255.255 \n");
     fprintf(stdout, "\n****************************** Example ****************************\n\n");
     fprintf(stdout,
