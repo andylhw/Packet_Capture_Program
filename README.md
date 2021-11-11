@@ -108,6 +108,8 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size)
   C.	기존 함수들과 마찬가지로 index를 생성해서, DHCP패킷을 분석을 하게 된다. Fprintf를 사용하여 파일에 씀과 동시에 출력이 되게 함으로, 파일을 열지않고 간단한 정보를 접할 수 있게 작성함.
   D.	DHCP에 특징인 Option은 while문을 사용하여, dhcpHeader에서 특정 index 값에 따라서 다르게 출력하게 하였다. 여기서 특정 값은 DHCP Message Type, Parameter Request List, Maximum DHCP Message Size, Client identifier, Requested IP Address, DHCP Server Identifier, Host Name, Vender class identifier, End, Subnet Mask, Router, Domain Name Server, Domain Name, IP Address Lease Time이 있다. 나머지는 Not pre-coded Type을 통해서 묶었지만, 패킷 특성을 분석하여, 다음 Option이 정상출력하게 코드를 작성하였다. 이 While문은 Options – End가 발생하였을 때 끝나게 설정하였다. 
     i.	Parameter Request List에서는 Subnet Mask, Classless Static Route, Router, Domain Name Server, Domain Name, URL, Domain Search, Private/Proxy autodiscovery, LDAP, NetBIOS over TCP/IP Name Server, NetBIOS over TCP/IP Node Type, Time offset, Host Name, Interface MTU, Broadcast Address, Static Route, Network Interface Service Domain, Network Information Service Servers, Network Time Protocol Servers, Private/Classless Static Route, Root Path를 감지할 수 있다.
-참고:
+    
+    
+##참고:
 리눅스 패킷캡쳐 프로그램
 https://github.com/gowoonsori/linux_packetCaptureProgram
