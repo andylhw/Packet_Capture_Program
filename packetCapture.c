@@ -1,18 +1,3 @@
-/*
-    작성자 :      홍의성 (gowoonsori)
-
-    공통 수집 :   Ehternet header
-    
-
-    기본 start :  TCP / UDP / ICMP 3종류의 tcp/ip프로토콜만 수집
-
-    필터 입력 가능 정보 :  port와 ip로만 추출 가능
-                        -port :
-                            HTTP(80)
-                            DNS (53)
-                         두 종류의 프로토콜만 추출 가능
-                        -ip
-*/
 #include <arpa/inet.h>         //network 정보 변환
 #include <ctype.h>             //isdigit
 #include <netinet/if_ether.h>  //etherrnet 구조체
