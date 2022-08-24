@@ -7,60 +7,115 @@ IDE - gedit
 
 ## 코드 함수 소개
 void *PacketCapture_thread(void *arg)
+
 -	패킷 캡쳐 스레드
+
 void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size) 
+
 -	ARP 헤더 캡쳐할 때 사용하는 함수
+
 void Arp_header_print(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size)
+
 -	캡쳐한 ARP 헤더를 프린트 할 때 사용하는 함수.
-void Capture_helper(FILE *captureFile, unsigned char *, int)                                      
+
+void Capture_helper(FILE *captureFile, unsigned char *, int)      
+
 -	캡쳐한 패킷 프로토콜 분류 
+
 void Ethernet_header_fprint(FILE *captureFile, struct iphdr *)
+
 -	Ethernet 헤더 정보 fprint
+
 void Ip_header_fprint(FILE *captureFile, struct iphdr *, struct sockaddr_in, struct sockaddr_in)
+
 -	ip 헤더 정보 fprint 
+
 void Tcp_header_capture(FILE *captureFile, struct ethhdr *, struct iphdr *, unsigned char *, int)  
+
 -	 tcp 헤더 정보 capture
+
 void Tcp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct tcphdr *, struct sockaddr_in, struct sockaddr_in, int Size)
+
 -	tcp 헤더 정보 fprint
+
 void Udp_header_capture(FILE *captureFile, struct ethhdr *, struct iphdr *, unsigned char *, int Size)
+
 -	udp 헤더 정보 capture
+
 void Udp_header_fprint(FILE *, unsigned char *, struct ethhdr *, struct iphdr *, struct udphdr *, struct sockaddr_in, struct sockaddr_in, int Size)
+
 -	udp 헤더 정보 fprint
+
 void Dns_header_frpint(); 
+
 -	DNS 헤더 프린트
+
 void Change_hex_to_ascii(FILE *captureFile, unsigned char *, int, int)
+
 -	payload값 hex/ascii/file option에 맞게 출력
+
 void MenuBoard();           
+
 -	menu board
+
 void Menu_helper();         
+
 -	menu board exception handling
+
 void StartMenuBoard();      
+
 -	start menu board
+
 bool start_helper(char *);  
+
 -	start menu exception handling
+
 bool IsPort(char *);        
+
 -	포트 형식 검사 | 맞으면 true
+
 bool IsIpAddress(char *);   
+
 -	ip 형식 검사 | 맞으면 true
+
 bool IsDigit();             
+
 -	 string 이 숫자인지 검사 | 맞으면 true
+
 void buffer_flush();        
+
 -	입력 버퍼 지우기
+
 void http_header_capture(FILE *captureData, unsigned char *response, int Size)
+
 -	HTTP헤더캡쳐
+
 void https_header_capture(FILE *captureData, unsigned char *httpsHeader, int Size)
+
 -	HTTPS헤더캡쳐
+
 void https_header_print(FILE *captureData, unsigned char *httpsHeader, int Size)
+
 -	HTTP헤더 캡쳐한것을 파일에 쓰거나 보여주기
+
 void https_handshake_capture(FILE *captureData, unsigned char *httpsHeader, int idx)
+
 -	HTTPS- Handshake 캡쳐 (HTTPS가 너무 커서 쪼갬)
+
 void https_ccs_capture(FILE *captureData, unsigned char *httpsHeader, int idx)
+
 -	HTTPS ChangeCipherSpec 캡쳐
+
 void https_appdata_capture(FILE *captureData, unsigned char *httpsHeader, int idx)
+
 -	HTTPS Application Data캡쳐
+
 void https_encalert_capture(FILE *captureData, unsigned char *httpsHeader, int idx)
+
 -	HTTPS Encryption Alert 캡쳐
+
 void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size)
+
 -	DHCP헤더 영역 캡쳐.
 
 ## 설명서
