@@ -1,11 +1,11 @@
 # NetworkProgramming_Final
 네트워크프로그래밍 과제
 
-##개발환경
+## 개발환경
 Linux - Ubuntu 20.24
 IDE - gedit
 
-##코드 함수 소개
+## 코드 함수 소개
 void *PacketCapture_thread(void *arg)
 -	패킷 캡쳐 스레드
 void ARP_header_capture(FILE *captureData, struct ethhdr *etherHeader, struct arpheader *arpHeader, unsigned char *Buffer, int Size) 
@@ -63,7 +63,7 @@ void https_encalert_capture(FILE *captureData, unsigned char *httpsHeader, int i
 void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size)
 -	DHCP헤더 영역 캡쳐.
 
-##설명서
+## 설명서
 우선 가장 큰 거름망은 포트번호이다. 각각의 프로토콜마다 포트번호가 다르게 움직인다. (ARP는 제외). HTTP: 80, HTTPS: 443, DNS: 53, DHCP: 67
 따라서 포트 번호를 지정하면, 캡쳐할 수 있는 패킷이 달라지기 때문에, 패킷을 다르게 지정하는것이 중요하다.
 
@@ -71,7 +71,7 @@ void dhcp_header_fprint(FILE *captureData, unsigned char *dhcpHeader, int Size)
 해당 필터를 입력하고 나면, 패킷을 감지하기 시작하는데, 필터에 걸러진 것만 출력하면서 파일에 생성되게 된다. 파일은 해당 폴더에 captureFile(21-6-8T5:30:26).txt같은 형식으로 Read-only 파일이 생성된다.
 패킷을 감지하는 것을 종료하고 싶으면, 2번을 누르고 엔터를 치면 되고, 메뉴로 돌아가고 싶으면, 3번을 누르면 된다.
 
-##Packet별 함수 동작 방식
+## Packet별 함수 동작 방식
 1. ARP Packet
   A. Capture_helper에서 함수를 감지한다.
   B. ARP 패킷이 감지되었을 경우 (0x0806), ARP_header_capture함수 실행  
