@@ -1,11 +1,11 @@
 CC = gcc
 CFLAGS = 
 CLIBS = 
-CMDS = 20170800
+CMDS = packetCapture
 
 all : $(CMDS)
 
-20170800 : 20170800.c
+packetCapture : packetCapture.c
 	$(CC) $(CFLAGS) $^ -o $@ $(CLIBS) -lpthread -W
 
 clean :
