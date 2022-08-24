@@ -1,5 +1,5 @@
-# NetworkProgramming_Final
-네트워크프로그래밍 과제
+# Customized_Wireshark in Linux
+Wireshark와 거의 유사한 기능을 하는 동일한 기능을 하는 패킷 캡쳐 프로그램이다.
 
 ## 개발환경
 Linux - Ubuntu 20.24
